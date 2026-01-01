@@ -58,6 +58,11 @@ class Config:
     # 知识融合配置
     KNOWLEDGE_MAX_CONTENT_LENGTH = int(os.getenv('KNOWLEDGE_MAX_CONTENT_LENGTH', '8000'))
     KNOWLEDGE_MAX_DOC_ITEMS = int(os.getenv('KNOWLEDGE_MAX_DOC_ITEMS', '10'))  # 文档知识最大条目数
+    KNOWLEDGE_CHUNK_SIZE = int(os.getenv('KNOWLEDGE_CHUNK_SIZE', '2000'))  # 知识分块大小（字符）
+    KNOWLEDGE_CHUNK_OVERLAP = int(os.getenv('KNOWLEDGE_CHUNK_OVERLAP', '200'))  # 分块重叠大小
+    
+    # 多模态模型配置（用于图片摘要）
+    IMAGE_CAPTION_MODEL = os.getenv('IMAGE_CAPTION_MODEL', 'qwen3-vl-plus-2025-12-19')
 
 
 class DevelopmentConfig(Config):

@@ -1,11 +1,17 @@
 """
-知识服务 - 管理和融合多来源知识（一期简化版）
+知识服务 - 管理和融合多来源知识
 
 一期简化策略：
 - 整个文档作为 1 条知识，不分块
 - 基于标题/文件名去重
 - 文档知识优先于网络搜索
+
+二期增强：
+- 支持知识分块
+- 两级结构：文档摘要 + 分块内容
+- 图片摘要整合
 """
+import os
 import re
 import logging
 from dataclasses import dataclass, field
@@ -294,6 +300,243 @@ class KnowledgeService:
             if item.title and item.title == e.title:
                 return True
         return False
+    
+    # ========== 二期新增：两级结构检索 ==========
+    
+    def prepare_chunked_knowledge(
+        self,
+        documents: List[Dict[str, Any]],
+        chunks: List[Dict[str, Any]],
+        images: List[Dict[str, Any]] = None
+    ) -> List[KnowledgeItem]:
+        """
+        准备分块知识（二期）
+        
+        两级结构：
+        1. 文档级：摘要 + 元信息
+        2. 分块级：具体内容片段
+        
+        Args:
+            documents: 文档列表，包含 {filename, summary, ...}
+            chunks: 分块列表，包含 {document_id, title, content, ...}
+            images: 图片列表，包含 {document_id, caption, ...}
+        
+        Returns:
+            知识条目列表
+        """
+        items = []
+        images = images or []
+        
+        # 按文档 ID 分组
+        doc_map = {doc.get('id'): doc for doc in documents}
+        chunks_by_doc = {}
+        images_by_doc = {}
+        
+        for chunk in chunks:
+            doc_id = chunk.get('document_id')
+            if doc_id not in chunks_by_doc:
+                chunks_by_doc[doc_id] = []
+            chunks_by_doc[doc_id].append(chunk)
+        
+        for img in images:
+            doc_id = img.get('document_id')
+            if doc_id not in images_by_doc:
+                images_by_doc[doc_id] = []
+            images_by_doc[doc_id].append(img)
+        
+        # 为每个文档创建知识条目
+        for doc_id, doc in doc_map.items():
+            filename = doc.get('filename', '')
+            summary = doc.get('summary', '')
+            doc_chunks = chunks_by_doc.get(doc_id, [])
+            doc_images = images_by_doc.get(doc_id, [])
+            
+            # 1. 文档级摘要（如果有）
+            if summary:
+                items.append(KnowledgeItem(
+                    source_type='document',
+                    title=f"{filename} - 摘要",
+                    content=summary,
+                    file_name=filename,
+                    relevance_score=1.0
+                ))
+            
+            # 2. 分块级内容
+            for chunk in doc_chunks:
+                chunk_title = chunk.get('title', '')
+                chunk_content = chunk.get('content', '')
+                
+                if not chunk_content:
+                    continue
+                
+                # 截断过长内容
+                content = self._truncate_content(chunk_content)
+                
+                items.append(KnowledgeItem(
+                    source_type='document',
+                    title=f"{filename} - {chunk_title}" if chunk_title else filename,
+                    content=content,
+                    file_name=filename,
+                    relevance_score=0.9
+                ))
+            
+            # 3. 图片摘要（作为补充知识）
+            if doc_images:
+                image_captions = []
+                for img in doc_images:
+                    caption = img.get('caption', '')
+                    if caption:
+                        page_num = img.get('page_num', 0)
+                        image_captions.append(f"- 第{page_num}页图片: {caption}")
+                
+                if image_captions:
+                    items.append(KnowledgeItem(
+                        source_type='document',
+                        title=f"{filename} - 图片内容",
+                        content="\n".join(image_captions),
+                        file_name=filename,
+                        relevance_score=0.7
+                    ))
+        
+        logger.info(f"准备分块知识: {len(items)} 条 (来自 {len(documents)} 个文档)")
+        return items
+    
+    def get_merged_knowledge_v2(
+        self,
+        documents: List[Dict[str, Any]],
+        chunks: List[Dict[str, Any]],
+        images: List[Dict[str, Any]],
+        web_knowledge: List[KnowledgeItem],
+        max_items: int = 30
+    ) -> List[KnowledgeItem]:
+        """
+        融合分块知识和网络搜索知识（二期）
+        
+        策略：
+        1. 文档摘要优先
+        2. 相关分块补充
+        3. 网络知识填充
+        
+        Args:
+            documents: 文档列表
+            chunks: 分块列表
+            images: 图片列表
+            web_knowledge: 网络搜索知识
+            max_items: 最大返回条目数
+        
+        Returns:
+            融合后的知识列表
+        """
+        # 准备分块知识
+        doc_knowledge = self.prepare_chunked_knowledge(documents, chunks, images)
+        
+        result = []
+        max_doc_items = int(os.getenv('KNOWLEDGE_MAX_DOC_ITEMS', '10'))
+        
+        # 1. 添加文档知识（按相关性排序）
+        doc_knowledge.sort(key=lambda x: x.relevance_score, reverse=True)
+        doc_count = min(len(doc_knowledge), max_doc_items)
+        result.extend(doc_knowledge[:doc_count])
+        logger.info(f"添加文档知识: {doc_count} 条")
+        
+        # 2. 添加网络知识（去重）
+        web_added = 0
+        for web_item in web_knowledge:
+            if len(result) >= max_items:
+                break
+            
+            if not self._is_duplicate_simple(web_item, result):
+                result.append(web_item)
+                web_added += 1
+        
+        logger.info(f"添加网络知识: {web_added} 条")
+        logger.info(f"融合完成 (v2): 共 {len(result)} 条知识")
+        
+        return result
+    
+    def summarize_for_prompt_v2(
+        self,
+        knowledge_items: List[KnowledgeItem],
+        max_total_length: int = 30000
+    ) -> Dict[str, Any]:
+        """
+        将知识条目整理为 Prompt 可用的格式（二期增强）
+        
+        增强：按文档分组展示
+        
+        Args:
+            knowledge_items: 知识条目列表
+            max_total_length: 最大总长度
+        
+        Returns:
+            {
+                'background_knowledge': str,
+                'document_references': list,
+                'web_references': list,
+                'knowledge_stats': dict
+            }
+        """
+        doc_refs = []
+        web_refs = []
+        
+        # 按来源分组
+        doc_items = [i for i in knowledge_items if i.source_type == 'document']
+        web_items = [i for i in knowledge_items if i.source_type == 'web_search']
+        
+        knowledge_parts = []
+        total_length = 0
+        
+        # 文档知识
+        if doc_items:
+            knowledge_parts.append("## 📚 文档知识\n")
+            seen_files = set()
+            
+            for item in doc_items:
+                if total_length + len(item.content) > max_total_length:
+                    remaining = max_total_length - total_length
+                    if remaining > 500:
+                        truncated = item.content[:remaining] + "\n...(内容已截断)"
+                        knowledge_parts.append(f"### {item.title}\n\n{truncated}")
+                    break
+                
+                knowledge_parts.append(f"### {item.title}\n\n{item.content}")
+                total_length += len(item.content)
+                
+                if item.file_name and item.file_name not in seen_files:
+                    doc_refs.append({
+                        'title': item.title.split(' - ')[0] if ' - ' in item.title else item.title,
+                        'file_name': item.file_name
+                    })
+                    seen_files.add(item.file_name)
+        
+        # 网络知识
+        if web_items and total_length < max_total_length:
+            knowledge_parts.append("\n## 🌐 网络知识\n")
+            
+            for item in web_items:
+                if total_length + len(item.content) > max_total_length:
+                    break
+                
+                knowledge_parts.append(f"### {item.title}\n\n{item.content}")
+                total_length += len(item.content)
+                
+                web_refs.append({
+                    'title': item.title,
+                    'url': item.url
+                })
+        
+        background_knowledge = "\n\n".join(knowledge_parts)
+        
+        return {
+            'background_knowledge': background_knowledge,
+            'document_references': doc_refs,
+            'web_references': web_refs,
+            'knowledge_stats': {
+                'doc_items': len(doc_items),
+                'web_items': len(web_items),
+                'total_length': total_length
+            }
+        }
 
 
 # 全局单例

@@ -1,20 +1,29 @@
 """
 文件解析服务 - 使用 MinerU 解析 PDF/文档
-复用自 AI绘本 项目
+
+二期新增：
+- 知识分块功能
+- 图片摘要生成（多模态模型）
 """
 import os
 import re
 import time
 import uuid
+import base64
 import logging
 import zipfile
 import io
 from pathlib import Path
-from typing import Optional, List, Tuple, Callable
+from typing import Optional, List, Tuple, Callable, Dict, Any
 
 import requests
+from jinja2 import Environment, FileSystemLoader
 
 logger = logging.getLogger(__name__)
+
+# 初始化 Jinja2 模板环境
+_templates_dir = Path(__file__).parent / 'prompts'
+_jinja_env = Environment(loader=FileSystemLoader(str(_templates_dir)))
 
 
 class FileParserService:
@@ -415,6 +424,270 @@ class FileParserService:
         
         pattern = r'!\[(.*?)\]\(([^\)]+)\)'
         return re.sub(pattern, replace_match, markdown)
+    
+    # ========== 二期新增：知识分块 ==========
+    
+    def chunk_markdown(
+        self, 
+        markdown: str, 
+        chunk_size: int = 2000, 
+        chunk_overlap: int = 200
+    ) -> List[Dict[str, Any]]:
+        """
+        将 Markdown 内容分块
+        
+        策略：
+        1. 优先按标题分块（## 或 ###）
+        2. 如果单个章节过长，再按段落分块
+        3. 保留分块位置信息
+        
+        Args:
+            markdown: Markdown 内容
+            chunk_size: 目标分块大小（字符）
+            chunk_overlap: 分块重叠大小
+        
+        Returns:
+            分块列表，每个分块包含 {chunk_type, title, content, start_pos, end_pos}
+        """
+        chunks = []
+        
+        # 按标题分割（## 或 ###）
+        sections = self._split_by_headers(markdown)
+        
+        for section in sections:
+            title = section.get('title', '')
+            content = section.get('content', '')
+            start_pos = section.get('start_pos', 0)
+            
+            if len(content) <= chunk_size:
+                # 内容不超过限制，直接作为一个分块
+                chunks.append({
+                    'chunk_type': 'section',
+                    'title': title,
+                    'content': content,
+                    'start_pos': start_pos,
+                    'end_pos': start_pos + len(content)
+                })
+            else:
+                # 内容过长，按段落再分块
+                sub_chunks = self._split_by_paragraphs(
+                    content, chunk_size, chunk_overlap, start_pos, title
+                )
+                chunks.extend(sub_chunks)
+        
+        logger.info(f"Markdown 分块完成: {len(chunks)} 块")
+        return chunks
+    
+    def _split_by_headers(self, markdown: str) -> List[Dict[str, Any]]:
+        """按标题分割 Markdown"""
+        sections = []
+        
+        # 匹配 ## 或 ### 标题
+        header_pattern = r'^(#{2,3})\s+(.+)$'
+        lines = markdown.split('\n')
+        
+        current_section = {'title': '', 'content': '', 'start_pos': 0}
+        current_pos = 0
+        
+        for line in lines:
+            match = re.match(header_pattern, line)
+            if match:
+                # 保存之前的 section
+                if current_section['content'].strip():
+                    sections.append(current_section)
+                
+                # 开始新 section
+                current_section = {
+                    'title': match.group(2).strip(),
+                    'content': line + '\n',
+                    'start_pos': current_pos
+                }
+            else:
+                current_section['content'] += line + '\n'
+            
+            current_pos += len(line) + 1  # +1 for newline
+        
+        # 保存最后一个 section
+        if current_section['content'].strip():
+            sections.append(current_section)
+        
+        # 如果没有找到任何标题，整个文档作为一个 section
+        if not sections:
+            sections.append({
+                'title': '',
+                'content': markdown,
+                'start_pos': 0
+            })
+        
+        return sections
+    
+    def _split_by_paragraphs(
+        self, 
+        content: str, 
+        chunk_size: int, 
+        chunk_overlap: int,
+        base_pos: int,
+        parent_title: str
+    ) -> List[Dict[str, Any]]:
+        """按段落分块长内容"""
+        chunks = []
+        
+        # 按空行分割段落
+        paragraphs = re.split(r'\n\s*\n', content)
+        
+        current_chunk = ''
+        current_start = base_pos
+        chunk_index = 0
+        
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            
+            if len(current_chunk) + len(para) + 2 <= chunk_size:
+                current_chunk += para + '\n\n'
+            else:
+                # 保存当前分块
+                if current_chunk.strip():
+                    chunks.append({
+                        'chunk_type': 'paragraph',
+                        'title': f"{parent_title} (Part {chunk_index + 1})" if parent_title else f"Part {chunk_index + 1}",
+                        'content': current_chunk.strip(),
+                        'start_pos': current_start,
+                        'end_pos': current_start + len(current_chunk)
+                    })
+                    chunk_index += 1
+                
+                # 开始新分块（带重叠）
+                overlap_text = current_chunk[-chunk_overlap:] if len(current_chunk) > chunk_overlap else ''
+                current_start = current_start + len(current_chunk) - len(overlap_text)
+                current_chunk = overlap_text + para + '\n\n'
+        
+        # 保存最后一个分块
+        if current_chunk.strip():
+            chunks.append({
+                'chunk_type': 'paragraph',
+                'title': f"{parent_title} (Part {chunk_index + 1})" if parent_title else f"Part {chunk_index + 1}",
+                'content': current_chunk.strip(),
+                'start_pos': current_start,
+                'end_pos': current_start + len(current_chunk)
+            })
+        
+        return chunks
+    
+    # ========== 二期新增：图片摘要 ==========
+    
+    def generate_image_captions(
+        self, 
+        images: List[Dict[str, Any]], 
+        llm_service=None,
+        max_images: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        为图片生成摘要描述
+        
+        Args:
+            images: 图片列表，每个包含 {path, url, filename, page_num}
+            llm_service: LLM 服务实例（需支持 vision 模型）
+            max_images: 最多处理的图片数量
+        
+        Returns:
+            带有 caption 的图片列表
+        """
+        if not llm_service:
+            logger.warning("未提供 LLM 服务，跳过图片摘要生成")
+            return images
+        
+        result = []
+        processed = 0
+        
+        for img in images:
+            if processed >= max_images:
+                # 超过限制的图片不生成摘要
+                result.append(img)
+                continue
+            
+            img_path = img.get('path', '')
+            if not img_path or not os.path.exists(img_path):
+                result.append(img)
+                continue
+            
+            try:
+                # 读取图片并转为 base64
+                with open(img_path, 'rb') as f:
+                    img_data = f.read()
+                img_base64 = base64.b64encode(img_data).decode('utf-8')
+                
+                # 确定 MIME 类型
+                ext = os.path.splitext(img_path)[1].lower()
+                mime_map = {
+                    '.png': 'image/png',
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.gif': 'image/gif',
+                    '.webp': 'image/webp'
+                }
+                mime_type = mime_map.get(ext, 'image/jpeg')
+                
+                # 调用多模态模型生成描述
+                template = _jinja_env.get_template('image_caption.j2')
+                prompt = template.render(max_length=200)
+                caption = llm_service.chat_with_image(prompt, img_base64, mime_type)
+                
+                if caption:
+                    img['caption'] = caption
+                    logger.info(f"图片摘要生成成功: {img.get('filename', '')}")
+                    processed += 1
+                
+            except Exception as e:
+                logger.warning(f"图片摘要生成失败: {img_path}, 错误: {e}")
+            
+            result.append(img)
+        
+        logger.info(f"图片摘要生成完成: {processed}/{len(images)} 张")
+        return result
+    
+    def generate_document_summary(
+        self, 
+        markdown: str, 
+        llm_service=None,
+        max_length: int = 500
+    ) -> Optional[str]:
+        """
+        生成文档摘要（二期新增）
+        
+        Args:
+            markdown: 文档 Markdown 内容
+            llm_service: LLM 服务实例
+            max_length: 摘要最大长度
+        
+        Returns:
+            文档摘要
+        """
+        if not llm_service:
+            logger.warning("未提供 LLM 服务，跳过文档摘要生成")
+            return None
+        
+        try:
+            # 截取前 4000 字符用于生成摘要
+            content_preview = markdown[:4000] if len(markdown) > 4000 else markdown
+            
+            template = _jinja_env.get_template('document_summary.j2')
+            prompt = template.render(max_length=max_length, content_preview=content_preview)
+            
+            summary = llm_service.chat(prompt, model_type="text")
+            
+            if summary:
+                # 确保不超过最大长度
+                if len(summary) > max_length:
+                    summary = summary[:max_length-3] + "..."
+                logger.info(f"文档摘要生成成功: {len(summary)} 字")
+                return summary
+            
+        except Exception as e:
+            logger.error(f"文档摘要生成失败: {e}")
+        
+        return None
 
 
 # 全局单例

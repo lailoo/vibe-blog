@@ -20,6 +20,9 @@ from services import (
     init_blog_service, get_blog_service,
     init_search_service, get_search_service
 )
+from services.database_service import get_db_service, init_db_service
+from services.file_parser_service import get_file_parser, init_file_parser
+from services.knowledge_service import get_knowledge_service, init_knowledge_service
 
 # 配置日志
 LOG_DIR = os.path.join(os.path.dirname(__file__), 'logs')
@@ -70,6 +73,26 @@ def create_app(config_class=None):
     # 初始化图片生成服务（图片保存到 outputs/images/）
     app.config['IMAGE_OUTPUT_FOLDER'] = os.path.join(app.config.get('OUTPUT_FOLDER', 'outputs'), 'images')
     init_image_service(app.config)
+    
+    # 初始化知识源相关服务（二期）
+    init_db_service()
+    init_knowledge_service(
+        max_content_length=app.config.get('KNOWLEDGE_MAX_CONTENT_LENGTH', 8000)
+    )
+    
+    # 初始化文件解析服务
+    mineru_token = app.config.get('MINERU_TOKEN', '')
+    if mineru_token:
+        upload_folder = os.path.join(os.path.dirname(__file__), 'uploads')
+        os.makedirs(upload_folder, exist_ok=True)
+        init_file_parser(
+            mineru_token=mineru_token,
+            mineru_api_base=app.config.get('MINERU_API_BASE', 'https://mineru.net'),
+            upload_folder=upload_folder
+        )
+        logger.info("文件解析服务已初始化")
+    else:
+        logger.warning("MINERU_TOKEN 未配置，PDF 解析功能不可用")
     
     # 健康检查
     @app.route('/health')
@@ -485,6 +508,186 @@ def create_app(config_class=None):
             }
         })
     
+    # ========== 知识源上传 API（二期） ==========
+    
+    import uuid
+    import threading
+    
+    @app.route('/api/blog/upload', methods=['POST'])
+    def upload_document():
+        """
+        上传知识文档
+        
+        请求: multipart/form-data, file 字段
+        支持格式: PDF, MD, TXT
+        
+        返回:
+        {
+            "success": true,
+            "document_id": "doc_xxx",
+            "filename": "xxx.pdf",
+            "status": "pending"
+        }
+        """
+        try:
+            if 'file' not in request.files:
+                return jsonify({'success': False, 'error': '请上传文件'}), 400
+            
+            file = request.files['file']
+            if not file.filename:
+                return jsonify({'success': False, 'error': '文件名为空'}), 400
+            
+            # 检查文件类型
+            filename = file.filename
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            if ext not in ['pdf', 'md', 'txt', 'markdown']:
+                return jsonify({'success': False, 'error': f'不支持的文件类型: {ext}'}), 400
+            
+            # 生成文档 ID
+            doc_id = f"doc_{uuid.uuid4().hex[:12]}"
+            
+            # 保存文件
+            upload_folder = os.path.join(os.path.dirname(__file__), 'uploads')
+            os.makedirs(upload_folder, exist_ok=True)
+            file_path = os.path.join(upload_folder, f"{doc_id}_{filename}")
+            file.save(file_path)
+            
+            file_size = os.path.getsize(file_path)
+            file_type = ext if ext != 'markdown' else 'md'
+            
+            # 创建数据库记录
+            db_service = get_db_service()
+            db_service.create_document(
+                doc_id=doc_id,
+                filename=filename,
+                file_path=file_path,
+                file_size=file_size,
+                file_type=file_type
+            )
+            
+            # 异步解析文档（二期：包含分块和图片摘要）
+            def parse_async():
+                try:
+                    db_service.update_document_status(doc_id, 'parsing')
+                    
+                    file_parser = get_file_parser()
+                    if not file_parser:
+                        db_service.update_document_status(doc_id, 'error', '文件解析服务不可用')
+                        return
+                    
+                    # 解析文件
+                    result = file_parser.parse_file(file_path, filename)
+                    
+                    if not result.get('success'):
+                        db_service.update_document_status(doc_id, 'error', result.get('error', '解析失败'))
+                        return
+                    
+                    markdown = result.get('markdown', '')
+                    images = result.get('images', [])
+                    mineru_folder = result.get('mineru_folder')
+                    
+                    # 保存解析结果
+                    db_service.save_parse_result(doc_id, markdown, mineru_folder)
+                    
+                    # 二期：知识分块
+                    chunk_size = app.config.get('KNOWLEDGE_CHUNK_SIZE', 2000)
+                    chunk_overlap = app.config.get('KNOWLEDGE_CHUNK_OVERLAP', 200)
+                    chunks = file_parser.chunk_markdown(markdown, chunk_size, chunk_overlap)
+                    db_service.save_chunks(doc_id, chunks)
+                    
+                    # 二期：生成文档摘要
+                    llm_service = get_llm_service()
+                    if llm_service:
+                        summary = file_parser.generate_document_summary(markdown, llm_service)
+                        if summary:
+                            db_service.update_document_summary(doc_id, summary)
+                    
+                    # 二期：图片摘要（如果有图片）
+                    if images and llm_service:
+                        images_with_caption = file_parser.generate_image_captions(images, llm_service)
+                        db_service.save_images(doc_id, images_with_caption)
+                    elif images:
+                        db_service.save_images(doc_id, images)
+                    
+                    logger.info(f"文档解析完成: {doc_id}, chunks={len(chunks)}, images={len(images)}")
+                    
+                except Exception as e:
+                    logger.error(f"文档解析异常: {doc_id}, {e}", exc_info=True)
+                    db_service.update_document_status(doc_id, 'error', str(e))
+            
+            thread = threading.Thread(target=parse_async, daemon=True)
+            thread.start()
+            
+            return jsonify({
+                'success': True,
+                'document_id': doc_id,
+                'filename': filename,
+                'status': 'pending'
+            })
+            
+        except Exception as e:
+            logger.error(f"文档上传失败: {e}", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/blog/upload/<document_id>/status', methods=['GET'])
+    def get_document_status(document_id):
+        """获取文档解析状态"""
+        db_service = get_db_service()
+        doc = db_service.get_document(document_id)
+        
+        if not doc:
+            return jsonify({'success': False, 'error': '文档不存在'}), 404
+        
+        # 获取分块和图片数量
+        chunks = db_service.get_chunks_by_document(document_id)
+        images = db_service.get_images_by_document(document_id)
+        
+        return jsonify({
+            'success': True,
+            'document_id': document_id,
+            'filename': doc.get('filename'),
+            'status': doc.get('status'),
+            'summary': doc.get('summary'),
+            'markdown_length': doc.get('markdown_length', 0),
+            'chunks_count': len(chunks),
+            'images_count': len(images),
+            'error_message': doc.get('error_message'),
+            'created_at': doc.get('created_at'),
+            'parsed_at': doc.get('parsed_at')
+        })
+    
+    @app.route('/api/blog/upload/<document_id>', methods=['DELETE'])
+    def delete_document(document_id):
+        """删除文档"""
+        db_service = get_db_service()
+        doc = db_service.get_document(document_id)
+        
+        if not doc:
+            return jsonify({'success': False, 'error': '文档不存在'}), 404
+        
+        # 删除文件
+        file_path = doc.get('file_path')
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+        
+        # 删除数据库记录（级联删除 chunks 和 images）
+        db_service.delete_document(document_id)
+        
+        return jsonify({'success': True, 'message': '文档已删除'})
+    
+    @app.route('/api/blog/documents', methods=['GET'])
+    def list_documents():
+        """列出所有文档"""
+        db_service = get_db_service()
+        status = request.args.get('status')
+        docs = db_service.list_documents(status=status)
+        
+        return jsonify({
+            'success': True,
+            'documents': docs,
+            'count': len(docs)
+        })
+    
     # ========== 长文博客生成 API ==========
     
     # 初始化搜索服务和博客生成服务
@@ -497,11 +700,12 @@ def create_app(config_class=None):
         else:
             logger.warning("智谱搜索服务不可用，Researcher Agent 将跳过联网搜索")
         
-        # 初始化博客生成服务
+        # 初始化博客生成服务（传入知识服务）
         llm_service = get_llm_service()
+        knowledge_service = get_knowledge_service()
         if llm_service and llm_service.is_available():
-            init_blog_service(llm_service, search_service)
-            logger.info("博客生成服务已初始化")
+            init_blog_service(llm_service, search_service, knowledge_service)
+            logger.info("博客生成服务已初始化（含知识融合支持）")
     except Exception as e:
         logger.warning(f"博客生成服务初始化失败: {e}")
     
