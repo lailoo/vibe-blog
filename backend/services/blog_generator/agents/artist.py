@@ -167,7 +167,17 @@ class ArtistAgent:
         Returns:
             更新后的状态
         """
+        if state.get('error'):
+            logger.error(f"前置步骤失败，跳过配图生成: {state.get('error')}")
+            state['images'] = []
+            return state
+        
         sections = state.get('sections', [])
+        if not sections:
+            logger.error("没有章节内容，跳过配图生成")
+            state['images'] = []
+            return state
+        
         outline = state.get('outline', {})
         sections_outline = outline.get('sections', [])
         

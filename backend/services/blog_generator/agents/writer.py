@@ -119,7 +119,17 @@ class WriterAgent:
         Returns:
             更新后的状态
         """
-        outline = state.get('outline', {})
+        if state.get('error'):
+            logger.error(f"前置步骤失败，跳过内容撰写: {state.get('error')}")
+            return state
+        
+        outline = state.get('outline')
+        if outline is None:
+            error_msg = "大纲为空，无法进行内容撰写"
+            logger.error(error_msg)
+            state['error'] = error_msg
+            return state
+        
         sections_outline = outline.get('sections', [])
         background_knowledge = state.get('background_knowledge', '')
         

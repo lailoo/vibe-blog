@@ -81,7 +81,17 @@ class QuestionerAgent:
         Returns:
             更新后的状态
         """
+        if state.get('error'):
+            logger.error(f"前置步骤失败，跳过追问检查: {state.get('error')}")
+            return state
+        
         sections = state.get('sections', [])
+        if not sections:
+            logger.warning("没有章节内容，跳过追问检查")
+            state['question_results'] = []
+            state['all_sections_detailed'] = True
+            return state
+        
         outline = state.get('outline', {})
         sections_outline = outline.get('sections', [])
         

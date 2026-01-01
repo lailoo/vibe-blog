@@ -104,8 +104,20 @@ class AssemblerAgent:
         Returns:
             更新后的状态
         """
+        if state.get('error'):
+            logger.error(f"前置步骤失败，跳过文档组装: {state.get('error')}")
+            state['final_markdown'] = ""
+            return state
+        
         outline = state.get('outline', {})
         sections = state.get('sections', [])
+        if not outline or not sections:
+            error_msg = "大纲或章节内容为空，无法进行文档组装"
+            logger.error(error_msg)
+            state['error'] = error_msg
+            state['final_markdown'] = ""
+            return state
+        
         code_blocks = state.get('code_blocks', [])
         images = state.get('images', [])
         

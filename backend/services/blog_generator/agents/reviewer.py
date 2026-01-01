@@ -80,7 +80,21 @@ class ReviewerAgent:
         Returns:
             更新后的状态
         """
+        if state.get('error'):
+            logger.error(f"前置步骤失败，跳过质量审核: {state.get('error')}")
+            state['review_score'] = 0
+            state['review_approved'] = False
+            state['review_issues'] = []
+            return state
+        
         sections = state.get('sections', [])
+        if not sections:
+            logger.error("没有章节内容，跳过质量审核")
+            state['review_score'] = 0
+            state['review_approved'] = False
+            state['review_issues'] = []
+            return state
+        
         outline = state.get('outline', {})
         
         # 组装文档用于审核

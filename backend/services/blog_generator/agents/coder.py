@@ -104,7 +104,16 @@ class CoderAgent:
         Returns:
             更新后的状态
         """
+        if state.get('error'):
+            logger.error(f"前置步骤失败，跳过代码生成: {state.get('error')}")
+            state['code_blocks'] = []
+            return state
+        
         sections = state.get('sections', [])
+        if not sections:
+            logger.warning("没有章节内容，跳过代码生成")
+            state['code_blocks'] = []
+            return state
         
         logger.info("开始生成代码示例")
         
