@@ -35,7 +35,7 @@
 
 ## 前言
 
-**一天时间，一本大模型技术教程，50万字。**
+**一天时间，一本大模型技术教程，40+万字。**
 
 我用一天时间完成了 [《Hello LLM-FineTuning》](https://lailoo.github.io/Hello-LLM-FineTuning) —— 一本大模型微调技术教程，共 **15+章**、**40+万字**、**100+ 精美配图**。嗯？我在吹牛，可以[点进去](https://lailoo.github.io/Hello-LLM-FineTuning)阅读下。
 
