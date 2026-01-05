@@ -86,6 +86,6 @@ backend/logs/
 *.bak
 *.swp
 
-# 文档目录
-docs/
+# 文档目录（保留部署文档）
+# docs  # 允许 docs 目录
 
