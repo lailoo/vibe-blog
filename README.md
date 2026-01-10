@@ -174,6 +174,7 @@ vibe-blog 应运而生，基于多 Agent 协作架构，自动完成调研、规
 
 
 ### vibe-reviewer
+![alt text](./logo/vibe-reviewer-entry.png)
 
 vibe-reviewer 是一个用于评估技术博客质量的工具，帮助你在发布前发现并修复内容问题。
 ![vibe-reviewer 主界面](./logo/vibe-reviewer-front.png)
