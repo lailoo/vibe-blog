@@ -925,6 +925,36 @@ def create_app(config_class=None):
             logger.error(f"删除历史记录失败: {e}", exc_info=True)
             return jsonify({'success': False, 'error': str(e)}), 500
     
+    # ========== vibe-reviewer 初始化 (新增) ==========
+    try:
+        from vibe_reviewer import init_reviewer_service, get_reviewer_service
+        from vibe_reviewer.api import register_reviewer_routes
+        
+        # 获取搜索服务
+        reviewer_search_service = None
+        try:
+            reviewer_search_service = get_search_service()
+            if reviewer_search_service and reviewer_search_service.is_available():
+                logger.info("vibe-reviewer 将使用智谱搜索服务进行增强评估")
+            else:
+                logger.warning("vibe-reviewer 搜索服务不可用，将仅使用 LLM 评估")
+                reviewer_search_service = None
+        except Exception as e:
+            logger.warning(f"获取搜索服务失败: {e}")
+        
+        # 初始化 ReviewerService
+        init_reviewer_service(
+            llm_service=get_llm_service(),
+            search_service=reviewer_search_service,
+        )
+        
+        # 注册 API 路由
+        register_reviewer_routes(app)
+        
+        logger.info("vibe-reviewer 模块已初始化")
+    except Exception as e:
+        logger.warning(f"vibe-reviewer 模块初始化失败 (可选模块): {e}")
+    
     logger.info("Banana Blog 后端应用已启动")
     return app
 

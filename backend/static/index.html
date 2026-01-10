@@ -567,10 +567,13 @@
     <div class="main-card">
         <div class="tabs">
             <div class="tab active" data-tab="blog">📝 长文博客</div>
+            <div class="tab" data-tab="reviewer">🔍 教程评估</div>
         </div>
         <div class="input-wrapper">
             <textarea class="text-input" id="contentInput" placeholder="输入技术主题，如：LangGraph 入门教程、Redis 性能优化..."></textarea>
         </div>
+        <!-- 博客生成内容区 -->
+        <div id="blogContent">
         <!-- 长文博客选项 -->
         <div class="options-bar" id="blogOptions">
             <div class="option-tags">
@@ -583,6 +586,29 @@
                 <div class="option-tag" data-length="long">📖 长文</div>
             </div>
             <button class="create-btn" id="createBlogBtn">✨ 生成博客</button>
+        </div>
+        </div>
+        
+        <!-- 教程评估内容区 (vibe-reviewer) -->
+        <div id="reviewerContent" style="display: none;">
+            <div class="input-wrapper" style="margin-bottom: 16px;">
+                <input type="text" class="text-input" id="gitUrlInput" 
+                    placeholder="输入 Git 仓库 URL，如：https://github.com/user/tutorial.git"
+                    style="width: 100%; padding: 16px; border: none; background: transparent; font-size: 16px; outline: none;">
+            </div>
+            <div class="options-bar" id="reviewerOptions">
+                <div class="option-tags">
+                    <div class="option-tag active" data-search="true">🔍 启用搜索增强</div>
+                    <div class="option-tag" data-search="false">⚡ 快速评估</div>
+                </div>
+                <button class="create-btn" id="startReviewBtn" style="background: linear-gradient(135deg, #4ECDC4, #45B7AA);">🚀 开始评估</button>
+            </div>
+            
+            <!-- 教程列表 -->
+            <div id="tutorialList" style="margin-top: 20px;">
+                <div style="font-size: 14px; color: #666; margin-bottom: 12px;">📚 已添加的教程</div>
+                <div id="tutorialCards" style="display: grid; gap: 12px;"></div>
+            </div>
         </div>
     </div>
 
@@ -676,18 +702,53 @@
                 const transformOptions = document.getElementById('transformOptions');
                 const blogOptions = document.getElementById('blogOptions');
                 
+                // 获取内容区域
+                const blogContent = document.getElementById('blogContent');
+                const reviewerContent = document.getElementById('reviewerContent');
+                const contentInput = document.getElementById('contentInput');
+                
+                // 隐藏示例和历史区域 (reviewer 模式下)
+                const examplesSection = document.getElementById('examples');
+                const historySection = document.getElementById('historySection');
+                
                 if (currentTab === 'transform') {
-                    transformOptions.style.display = 'flex';
-                    blogOptions.style.display = 'none';
-                    document.getElementById('contentInput').placeholder = '粘贴技术博客内容，AI 将转化为通俗易懂的科普绘本...';
+                    if (transformOptions) transformOptions.style.display = 'flex';
+                    if (blogOptions) blogOptions.style.display = 'none';
+                    if (blogContent) blogContent.style.display = 'block';
+                    if (reviewerContent) reviewerContent.style.display = 'none';
+                    if (contentInput) contentInput.parentElement.style.display = 'block';
+                    if (contentInput) contentInput.placeholder = '粘贴技术博客内容，AI 将转化为通俗易懂的科普绘本...';
+                    if (examplesSection) examplesSection.style.display = 'block';
+                    if (historySection) historySection.style.display = 'block';
                 } else if (currentTab === 'blog') {
-                    transformOptions.style.display = 'none';
-                    blogOptions.style.display = 'flex';
-                    document.getElementById('contentInput').placeholder = '输入技术主题，如：LangGraph 入门教程、Redis 性能优化...';
+                    if (transformOptions) transformOptions.style.display = 'none';
+                    if (blogOptions) blogOptions.style.display = 'flex';
+                    if (blogContent) blogContent.style.display = 'block';
+                    if (reviewerContent) reviewerContent.style.display = 'none';
+                    if (contentInput) contentInput.parentElement.style.display = 'block';
+                    if (contentInput) contentInput.placeholder = '输入技术主题，如：LangGraph 入门教程、Redis 性能优化...';
+                    if (examplesSection) examplesSection.style.display = 'block';
+                    if (historySection) historySection.style.display = 'block';
+                } else if (currentTab === 'reviewer') {
+                    if (transformOptions) transformOptions.style.display = 'none';
+                    if (blogOptions) blogOptions.style.display = 'none';
+                    if (blogContent) blogContent.style.display = 'none';
+                    if (reviewerContent) reviewerContent.style.display = 'block';
+                    if (contentInput) contentInput.parentElement.style.display = 'none';
+                    // 隐藏示例和历史区域
+                    if (examplesSection) examplesSection.style.display = 'none';
+                    if (historySection) historySection.style.display = 'none';
+                    // 加载教程列表
+                    loadTutorials();
                 } else {
-                    transformOptions.style.display = 'flex';
-                    blogOptions.style.display = 'none';
-                    document.getElementById('contentInput').placeholder = '描述你想要生成的图片...';
+                    if (transformOptions) transformOptions.style.display = 'flex';
+                    if (blogOptions) blogOptions.style.display = 'none';
+                    if (blogContent) blogContent.style.display = 'block';
+                    if (reviewerContent) reviewerContent.style.display = 'none';
+                    if (contentInput) contentInput.parentElement.style.display = 'block';
+                    if (contentInput) contentInput.placeholder = '描述你想要生成的图片...';
+                    if (examplesSection) examplesSection.style.display = 'block';
+                    if (historySection) historySection.style.display = 'block';
                 }
             });
         });
@@ -1583,6 +1644,614 @@
             // DOM 已经加载完成，直接执行
             loadHistory();
         }
+        
+        // ========== vibe-reviewer 功能 ==========
+        
+        // 加载教程列表
+        async function loadTutorials() {
+            try {
+                const response = await fetch('/api/reviewer/tutorials');
+                const data = await response.json();
+                if (data.success) {
+                    renderTutorialCards(data.tutorials);
+                }
+            } catch (error) {
+                console.error('加载教程列表失败:', error);
+            }
+        }
+        
+        // 渲染教程卡片
+        function renderTutorialCards(tutorials) {
+            const container = document.getElementById('tutorialCards');
+            if (!tutorials || tutorials.length === 0) {
+                container.innerHTML = '<div style="color: #999; font-size: 13px; padding: 20px; text-align: center;">暂无教程，请添加 Git 仓库 URL</div>';
+                return;
+            }
+            
+            container.innerHTML = tutorials.map(t => `
+                <div class="tutorial-card" data-id="${t.id}" style="
+                    background: rgba(255,255,255,0.8);
+                    border-radius: 12px;
+                    padding: 16px;
+                    border: 1px solid rgba(0,0,0,0.1);
+                    cursor: pointer;
+                    transition: all 0.3s;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div style="font-size: 15px; font-weight: 600; color: #333;">${t.name}</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 4px;">${t.git_url}</div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            ${t.overall_score && t.overall_score > 0 ? `
+                                <div style="
+                                    width: 40px; height: 40px;
+                                    border-radius: 50%;
+                                    background: ${t.overall_score >= 80 ? '#4ECDC4' : t.overall_score >= 60 ? '#FFD166' : '#ff6b6b'};
+                                    color: white;
+                                    display: flex; align-items: center; justify-content: center;
+                                    font-size: 14px; font-weight: 600;
+                                ">${Math.round(t.overall_score)}</div>
+                            ` : ''}
+                            <span style="
+                                padding: 4px 10px;
+                                background: ${t.status === 'completed' ? 'rgba(78,205,196,0.2)' : t.status === 'evaluating' ? 'rgba(100,149,237,0.2)' : 'rgba(255,209,102,0.2)'};
+                                color: ${t.status === 'completed' ? '#4ECDC4' : t.status === 'evaluating' ? '#6495ED' : '#FFD166'};
+                                border-radius: 12px;
+                                font-size: 12px;
+                            ">${t.status === 'completed' ? '✅ 已完成' : t.status === 'pending' ? '⏳ 待评估' : t.status === 'evaluating' ? '⚙️ 评估中' : t.status}</span>
+                        </div>
+                    </div>
+                    ${t.total_issues > 0 ? `
+                        <div style="display: flex; gap: 12px; margin-top: 12px; font-size: 12px;">
+                            <span style="color: #ff6b6b;">🔴 ${t.high_issues} 高</span>
+                            <span style="color: #FFD166;">🟡 ${t.medium_issues} 中</span>
+                            <span style="color: #4ECDC4;">🟢 ${t.low_issues} 低</span>
+                            <span style="color: #666;">共 ${t.total_chapters} 章节</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            
+            // 绑定点击事件
+            container.querySelectorAll('.tutorial-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    viewTutorialDetail(card.dataset.id);
+                });
+            });
+        }
+        
+        // 添加教程
+        document.getElementById('startReviewBtn')?.addEventListener('click', async () => {
+            const gitUrl = document.getElementById('gitUrlInput').value.trim();
+            if (!gitUrl) {
+                alert('请输入 Git 仓库 URL');
+                return;
+            }
+            
+            const enableSearch = document.querySelector('#reviewerOptions .option-tag[data-search="true"]')?.classList.contains('active') ?? true;
+            
+            try {
+                const response = await fetch('/api/reviewer/tutorials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        git_url: gitUrl,
+                        enable_search: enableSearch,
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('gitUrlInput').value = '';
+                    loadTutorials();
+                    alert('教程已添加！点击教程卡片可触发评估。');
+                } else {
+                    alert('添加失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('添加教程失败:', error);
+                alert('添加教程失败');
+            }
+        });
+        
+        // 查看教程详情
+        async function viewTutorialDetail(tutorialId) {
+            try {
+                const response = await fetch(`/api/reviewer/tutorials/${tutorialId}`);
+                const data = await response.json();
+                if (data.success) {
+                    const t = data.tutorial;
+                    showTutorialDetailModal(t);
+                }
+            } catch (error) {
+                console.error('获取教程详情失败:', error);
+            }
+        }
+        
+        // 显示教程详情弹窗
+        function showTutorialDetailModal(tutorial) {
+            const modal = document.createElement('div');
+            modal.className = 'tutorial-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); z-index: 1000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            
+            const statusText = {
+                'pending': '⏳ 待评估',
+                'cloning': '📥 克隆中',
+                'scanning': '🔍 扫描中',
+                'evaluating': '⚙️ 评估中',
+                'completed': '✅ 已完成',
+                'failed': '❌ 失败'
+            };
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white; border-radius: 16px; padding: 24px;
+                    max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                        <div>
+                            <h2 style="margin: 0; font-size: 20px; color: #333;">${tutorial.name}</h2>
+                            <div style="font-size: 12px; color: #666; margin-top: 4px;">${tutorial.git_url}</div>
+                        </div>
+                        <button onclick="this.closest('.tutorial-modal').remove()" style="
+                            background: none; border: none; font-size: 24px; cursor: pointer; color: #999;
+                        ">×</button>
+                    </div>
+                    
+                    <div style="display: flex; gap: 16px; margin-bottom: 20px;">
+                        <div style="
+                            flex: 1; background: linear-gradient(135deg, #4ECDC4, #45B7AA);
+                            border-radius: 12px; padding: 16px; color: white; text-align: center;
+                        ">
+                            <div style="font-size: 32px; font-weight: 700;">${tutorial.overall_score || '-'}</div>
+                            <div style="font-size: 12px; opacity: 0.9;">综合评分</div>
+                        </div>
+                        <div style="flex: 1; background: #f5f5f5; border-radius: 12px; padding: 16px; text-align: center;">
+                            <div style="font-size: 32px; font-weight: 700; color: #333;">${tutorial.total_chapters || 0}</div>
+                            <div style="font-size: 12px; color: #666;">章节数</div>
+                        </div>
+                        <div style="flex: 1; background: #f5f5f5; border-radius: 12px; padding: 16px; text-align: center;">
+                            <div style="font-size: 32px; font-weight: 700; color: #333;">${tutorial.total_issues || 0}</div>
+                            <div style="font-size: 12px; color: #666;">问题数</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+                        <span style="padding: 4px 12px; background: rgba(255,107,107,0.2); color: #ff6b6b; border-radius: 12px; font-size: 12px;">
+                            🔴 ${tutorial.high_issues || 0} 高
+                        </span>
+                        <span style="padding: 4px 12px; background: rgba(255,209,102,0.2); color: #FFD166; border-radius: 12px; font-size: 12px;">
+                            🟡 ${tutorial.medium_issues || 0} 中
+                        </span>
+                        <span style="padding: 4px 12px; background: rgba(78,205,196,0.2); color: #4ECDC4; border-radius: 12px; font-size: 12px;">
+                            🟢 ${tutorial.low_issues || 0} 低
+                        </span>
+                        <span style="padding: 4px 12px; background: rgba(0,0,0,0.1); color: #666; border-radius: 12px; font-size: 12px;">
+                            ${statusText[tutorial.status] || tutorial.status}
+                        </span>
+                    </div>
+                    
+                    <div style="background: #f9f9f9; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <label style="font-size: 13px; color: #666; white-space: nowrap;">评估章节数:</label>
+                            <input type="number" id="maxChaptersInput" value="20" min="1" max="100" style="
+                                flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px;
+                                font-size: 14px; width: 80px;
+                            ">
+                            <span style="font-size: 12px; color: #999;">（1-100，0=全部）</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px;">
+                        <button onclick="const maxChapters = parseInt(document.getElementById('maxChaptersInput').value) || 20; startEvaluation(${tutorial.id}, maxChapters); this.closest('.tutorial-modal').remove();" style="
+                            flex: 1; padding: 12px; background: linear-gradient(135deg, #4ECDC4, #45B7AA);
+                            border: none; border-radius: 10px; color: white; font-size: 14px; cursor: pointer;
+                        ">🚀 ${tutorial.status === 'completed' ? '重新评估' : '开始评估'}</button>
+                        <button onclick="viewChapters(${tutorial.id}); this.closest('.tutorial-modal').remove();" style="
+                            flex: 1; padding: 12px; background: #f5f5f5;
+                            border: none; border-radius: 10px; color: #333; font-size: 14px; cursor: pointer;
+                        ">📚 查看章节</button>
+                        ${tutorial.status === 'completed' ? `
+                        <button onclick="exportReport(${tutorial.id}); this.closest('.tutorial-modal').remove();" style="
+                            padding: 12px 16px; background: rgba(78,205,196,0.1);
+                            border: none; border-radius: 10px; color: #4ECDC4; font-size: 14px; cursor: pointer;
+                        ">📄 导出报告</button>
+                        ` : ''}
+                        <button onclick="deleteTutorial(${tutorial.id}); this.closest('.tutorial-modal').remove();" style="
+                            padding: 12px 16px; background: rgba(255,107,107,0.1);
+                            border: none; border-radius: 10px; color: #ff6b6b; font-size: 14px; cursor: pointer;
+                        ">🗑️</button>
+                    </div>
+                </div>
+            `;
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+            
+            document.body.appendChild(modal);
+        }
+        
+        // 开始评估 (使用 SSE 实时进度)
+        let reviewerEventSource = null;
+        
+        function startEvaluation(tutorialId, maxChapters = 20) {
+            // 显示进度面板 (复用 vibe-blog 的进度面板)
+            const progressPanel = document.getElementById('progressPanel');
+            const progressBody = document.getElementById('progressBody');
+            const statusBadge = document.getElementById('statusBadge');
+            const progressText = document.getElementById('progressText');
+            
+            progressPanel.classList.add('show');
+            progressBody.innerHTML = '';
+            statusBadge.textContent = '评估中';
+            progressText.textContent = `正在连接... (评估 ${maxChapters} 个章节)`;
+            
+            // 添加进度项
+            function addReviewerProgress(message, type = 'info') {
+                const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+                const item = document.createElement('div');
+                item.className = `progress-item ${type}`;
+                // 将换行符转换为 <br>，保留格式
+                const formattedMessage = message.replace(/\n/g, '<br>');
+                item.innerHTML = `
+                    <div class="time">${time}</div>
+                    <div class="message" style="white-space: pre-wrap;">${formattedMessage}</div>
+                `;
+                progressBody.appendChild(item);
+                progressBody.scrollTop = progressBody.scrollHeight;
+            }
+            
+            // 关闭之前的连接
+            if (reviewerEventSource) {
+                reviewerEventSource.close();
+            }
+            
+            // 创建 SSE 连接 (传递 maxChapters 参数)
+            const sseUrl = `/api/reviewer/tutorials/${tutorialId}/evaluate-stream?max_chapters=${maxChapters}`;
+            reviewerEventSource = new EventSource(sseUrl);
+            
+            reviewerEventSource.addEventListener('connected', (e) => {
+                const data = JSON.parse(e.data);
+                addReviewerProgress('🔗 连接成功，开始评估...', 'success');
+                progressText.textContent = '正在克隆仓库...';
+            });
+            
+            // 处理详细日志事件
+            reviewerEventSource.addEventListener('log', (e) => {
+                const data = JSON.parse(e.data);
+                const typeMap = { info: 'info', success: 'success', warning: 'warning', error: 'error' };
+                addReviewerProgress(data.message, typeMap[data.level] || 'info');
+            });
+            
+            reviewerEventSource.addEventListener('status', (e) => {
+                const data = JSON.parse(e.data);
+                const statusMap = {
+                    'cloning': '📥 正在克隆仓库...',
+                    'scanning': '🔍 正在扫描文件...',
+                    'evaluating': '⚙️ 正在评估章节...'
+                };
+                const msg = data.message || statusMap[data.status] || data.status;
+                addReviewerProgress(msg, 'info');
+                progressText.textContent = msg;
+            });
+            
+            reviewerEventSource.addEventListener('clone_complete', (e) => {
+                const data = JSON.parse(e.data);
+                addReviewerProgress(`✅ 仓库克隆完成`, 'success');
+            });
+            
+            reviewerEventSource.addEventListener('scan_complete', (e) => {
+                const data = JSON.parse(e.data);
+                addReviewerProgress(`📄 扫描完成: 找到 ${data.total_files} 个 Markdown 文件`, 'success');
+            });
+            
+            reviewerEventSource.addEventListener('chapters_ready', (e) => {
+                const data = JSON.parse(e.data);
+                addReviewerProgress(`📚 准备评估 ${data.total} 个章节`, 'info');
+            });
+            
+            reviewerEventSource.addEventListener('chapter_start', (e) => {
+                const data = JSON.parse(e.data);
+                progressText.textContent = `评估章节 ${data.chapter_index}/${data.total_chapters}`;
+                addReviewerProgress(`📖 开始评估: ${data.file_path}`, 'info');
+            });
+            
+            reviewerEventSource.addEventListener('chapter_step', (e) => {
+                const data = JSON.parse(e.data);
+                const stepMap = {
+                    'analyze': '分析内容',
+                    'search': '搜索参考',
+                    'depth': '深度检查',
+                    'quality': '质量审核',
+                    'readability': '可读性检测',
+                    'improve': '生成建议'
+                };
+                if (data.status === 'start') {
+                    progressText.textContent = `${stepMap[data.step] || data.step}...`;
+                }
+            });
+            
+            reviewerEventSource.addEventListener('chapter_complete', (e) => {
+                const data = JSON.parse(e.data);
+                const scoreColor = data.overall_score >= 80 ? '🟢' : data.overall_score >= 60 ? '🟡' : '🔴';
+                
+                // 显示章节完成信息
+                let msg = `${scoreColor} [${data.chapter_index}/${data.total_chapters}] ${data.title || data.file_path}`;
+                msg += `\n   评分: ${Math.round(data.overall_score)} (深度:${data.depth_score} 质量:${data.quality_score} 可读:${data.readability_score})`;
+                msg += `\n   问题: 🔴${data.high_issues} 🟡${data.medium_issues} 🟢${data.low_issues}`;
+                
+                // 显示发现的问题
+                if (data.issues && data.issues.length > 0) {
+                    data.issues.forEach((issue, i) => {
+                        const icon = issue.severity === 'high' ? '🔴' : issue.severity === 'medium' ? '🟡' : '🟢';
+                        msg += `\n   ${icon} ${issue.description.substring(0, 60)}...`;
+                    });
+                }
+                
+                addReviewerProgress(msg, 'success');
+                progressText.textContent = `已完成 ${data.chapter_index}/${data.total_chapters} 章节`;
+            });
+            
+            reviewerEventSource.addEventListener('chapter_error', (e) => {
+                const data = JSON.parse(e.data);
+                addReviewerProgress(`❌ 章节评估失败: ${data.error}`, 'error');
+            });
+            
+            reviewerEventSource.addEventListener('evaluation_complete', (e) => {
+                const data = JSON.parse(e.data);
+                addReviewerProgress(`🎉 评估完成! 综合评分: ${data.overall_score?.toFixed(1)}, 问题: ${data.total_issues}, 耗时: ${data.duration_seconds}秒`, 'success');
+            });
+            
+            reviewerEventSource.addEventListener('complete', (e) => {
+                const data = JSON.parse(e.data);
+                reviewerEventSource.close();
+                reviewerEventSource = null;
+                
+                statusBadge.textContent = '完成';
+                progressText.textContent = '评估完成';
+                
+                const r = data.result;
+                addReviewerProgress(`✨ 综合评分: ${r.overall_score?.toFixed(1) || '-'} | 章节: ${r.evaluated_chapters}/${r.total_chapters} | 问题: ${r.total_issues}`, 'success');
+                
+                // 刷新教程列表
+                loadTutorials();
+            });
+            
+            reviewerEventSource.addEventListener('error', (e) => {
+                let errorMsg = '评估出错';
+                try {
+                    const data = JSON.parse(e.data);
+                    errorMsg = data.message || errorMsg;
+                } catch {}
+                
+                addReviewerProgress(`❌ ${errorMsg}`, 'error');
+                statusBadge.textContent = '失败';
+                progressText.textContent = errorMsg;
+                
+                reviewerEventSource.close();
+                reviewerEventSource = null;
+            });
+            
+            reviewerEventSource.onerror = (e) => {
+                if (reviewerEventSource.readyState === EventSource.CLOSED) {
+                    return; // 正常关闭
+                }
+                addReviewerProgress('❌ 连接断开', 'error');
+                statusBadge.textContent = '断开';
+                reviewerEventSource.close();
+                reviewerEventSource = null;
+            };
+        }
+        
+        // 导出报告为 Markdown
+        function exportReport(tutorialId) {
+            window.open(`/api/reviewer/tutorials/${tutorialId}/export`, '_blank');
+        }
+        
+        // 查看章节列表
+        async function viewChapters(tutorialId) {
+            try {
+                const response = await fetch(`/api/reviewer/tutorials/${tutorialId}/chapters`);
+                const data = await response.json();
+                if (data.success) {
+                    showChaptersModal(tutorialId, data.chapters);
+                }
+            } catch (error) {
+                console.error('获取章节列表失败:', error);
+            }
+        }
+        
+        // 显示章节列表弹窗
+        function showChaptersModal(tutorialId, chapters) {
+            const modal = document.createElement('div');
+            modal.className = 'chapters-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); z-index: 1000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            
+            const chaptersHtml = chapters.length > 0 ? chapters.map(c => `
+                <div class="chapter-item" data-chapter-id="${c.id}" 
+                    onclick="${c.total_issues > 0 ? `viewChapterIssues(${c.id})` : ''}"
+                    style="
+                    background: #f9f9f9; border-radius: 10px; padding: 12px 16px;
+                    margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+                    cursor: ${c.total_issues > 0 ? 'pointer' : 'default'};
+                    transition: all 0.2s;
+                " ${c.total_issues > 0 ? 'onmouseover="this.style.background=\'#f0f0f0\'" onmouseout="this.style.background=\'#f9f9f9\'"' : ''}>
+                    <div style="pointer-events: none;">
+                        <div style="font-size: 14px; font-weight: 500; color: #333;">${c.title || c.file_name}</div>
+                        <div style="font-size: 11px; color: #999;">${c.file_path}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; pointer-events: none;">
+                        ${c.overall_score > 0 ? `
+                            <div style="
+                                width: 36px; height: 36px; border-radius: 50%;
+                                background: ${c.overall_score >= 80 ? '#4ECDC4' : c.overall_score >= 60 ? '#FFD166' : '#ff6b6b'};
+                                color: white; display: flex; align-items: center; justify-content: center;
+                                font-size: 12px; font-weight: 600;
+                            ">${c.overall_score}</div>
+                        ` : '<span style="color: #999; font-size: 12px;">未评估</span>'}
+                        ${c.total_issues > 0 ? `<span style="font-size: 11px; color: #ff6b6b;">${c.total_issues} 问题 →</span>` : ''}
+                    </div>
+                </div>
+            `).join('') : '<div style="color: #999; text-align: center; padding: 40px;">暂无章节数据</div>';
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white; border-radius: 16px; padding: 24px;
+                    max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0; font-size: 18px; color: #333;">📚 章节列表 (${chapters.length})</h2>
+                        <button onclick="this.closest('.chapters-modal').remove()" style="
+                            background: none; border: none; font-size: 24px; cursor: pointer; color: #999;
+                        ">×</button>
+                    </div>
+                    <div>${chaptersHtml}</div>
+                </div>
+            `;
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    return;
+                }
+                
+                // 点击章节项查看问题详情
+                const chapterItem = e.target.closest('.chapter-item');
+                if (chapterItem && chapterItem.dataset.chapterId) {
+                    const chapterId = chapterItem.dataset.chapterId;
+                    console.log('点击章节:', chapterId);
+                    viewChapterIssues(chapterId);
+                }
+            });
+            
+            document.body.appendChild(modal);
+        }
+        
+        // 查看章节问题详情
+        async function viewChapterIssues(chapterId) {
+            try {
+                const response = await fetch(`/api/reviewer/chapters/${chapterId}/issues`);
+                const data = await response.json();
+                if (data.success) {
+                    showIssuesModal(data.chapter, data.issues);
+                } else {
+                    alert('获取问题详情失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('获取问题详情失败:', error);
+                alert('获取问题详情失败');
+            }
+        }
+        
+        // 显示问题详情弹窗
+        function showIssuesModal(chapter, issues) {
+            const modal = document.createElement('div');
+            modal.className = 'issues-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); z-index: 1001;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            
+            const severityIcon = (s) => s === 'high' ? '🔴' : s === 'medium' ? '🟡' : '🟢';
+            const categoryName = (c) => ({ depth: '深度', quality: '质量', readability: '可读性' }[c] || c);
+            
+            const issuesHtml = issues.length > 0 ? issues.map(issue => `
+                <div style="
+                    background: #f9f9f9; border-radius: 10px; padding: 14px 16px;
+                    margin-bottom: 10px; border-left: 4px solid ${issue.severity === 'high' ? '#ff6b6b' : issue.severity === 'medium' ? '#FFD166' : '#4ECDC4'};
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 12px; color: #666;">
+                            ${severityIcon(issue.severity)} ${categoryName(issue.category)} · ${issue.issue_type}
+                        </span>
+                        <span style="font-size: 11px; color: #999;">${issue.location || ''}</span>
+                    </div>
+                    <div style="font-size: 13px; color: #333; margin-bottom: 8px;">${issue.description}</div>
+                    ${issue.suggestion ? `
+                        <div style="font-size: 12px; color: #4ECDC4; background: rgba(78,205,196,0.1); padding: 8px 10px; border-radius: 6px;">
+                            💡 ${issue.suggestion}
+                        </div>
+                    ` : ''}
+                    ${issue.reference ? `
+                        <div style="font-size: 11px; color: #666; margin-top: 6px;">
+                            📚 参考: ${issue.reference}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('') : '<div style="color: #999; text-align: center; padding: 40px;">🎉 没有发现问题</div>';
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white; border-radius: 16px; padding: 24px;
+                    max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="margin: 0; font-size: 18px; color: #333;">🔍 问题详情</h2>
+                        <button onclick="this.closest('.issues-modal').remove()" style="
+                            background: none; border: none; font-size: 24px; cursor: pointer; color: #999;
+                        ">×</button>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+                        <div style="font-size: 15px; font-weight: 600;">${chapter.title || chapter.file_name}</div>
+                        <div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">${chapter.file_path}</div>
+                        <div style="display: flex; gap: 16px; margin-top: 12px; font-size: 13px;">
+                            <span>评分: ${chapter.overall_score}</span>
+                            <span>🔴 ${chapter.high_issues || 0}</span>
+                            <span>🟡 ${chapter.medium_issues || 0}</span>
+                            <span>🟢 ${chapter.low_issues || 0}</span>
+                        </div>
+                    </div>
+                    <div>${issuesHtml}</div>
+                </div>
+            `;
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+            
+            document.body.appendChild(modal);
+        }
+        
+        // 删除教程
+        async function deleteTutorial(tutorialId) {
+            if (!confirm('确定要删除这个教程吗？')) return;
+            
+            try {
+                const response = await fetch(`/api/reviewer/tutorials/${tutorialId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    loadTutorials();
+                } else {
+                    alert('删除失败: ' + data.error);
+                }
+            } catch (error) {
+                console.error('删除教程失败:', error);
+            }
+        }
+        
+        // reviewer 选项切换
+        document.querySelectorAll('#reviewerOptions .option-tag').forEach(tag => {
+            tag.addEventListener('click', () => {
+                if (tag.dataset.search !== undefined) {
+                    document.querySelectorAll('#reviewerOptions .option-tag[data-search]').forEach(t => t.classList.remove('active'));
+                    tag.classList.add('active');
+                }
+            });
+        });
     </script>
 </body>
 </html>
