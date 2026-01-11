@@ -559,6 +559,12 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
+        
+        /* 进度条脉冲动画 */
+        @keyframes progress-pulse {
+            0%, 100% { width: 20%; margin-left: 0; }
+            50% { width: 60%; margin-left: 20%; }
+        }
     </style>
 </head>
 <body>
@@ -578,6 +584,8 @@
     </section>
 
     <div class="main-card">
+        <!-- 已上传文档列表（输入框上方） -->
+        <div id="uploadedDocsList" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;"></div>
         <div class="input-wrapper" style="position: relative;">
             <textarea class="text-input" id="contentInput" placeholder="输入技术主题，如：LangGraph 入门教程、Redis 性能优化..." style="padding-bottom: 50px;"></textarea>
             <!-- 输入框底部工具栏 -->
@@ -619,8 +627,6 @@
                         <div class="option-tag" data-length="medium" style="padding: 4px 10px; font-size: 11px; border-radius: 12px;">📑 中等</div>
                         <div class="option-tag" data-length="long" style="padding: 4px 10px; font-size: 11px; border-radius: 12px;">📖 长文</div>
                     </div>
-                    <!-- 已上传文档列表 -->
-                    <div id="uploadedDocsList" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
                 </div>
                 <!-- 生成按钮 -->
                 <button id="createBlogBtn" style="
@@ -774,7 +780,7 @@
             
             // 显示上传中状态
             const tempId = 'temp_' + Date.now();
-            addDocumentTag(tempId, file.name, 'uploading');
+            addDocumentTag(tempId, file.name, 'uploading', file.size);
             
             try {
                 const response = await fetch('/api/blog/upload', {
@@ -791,9 +797,10 @@
                     uploadedDocuments.push({
                         id: data.document_id,
                         filename: data.filename,
-                        status: data.status
+                        status: data.status,
+                        fileSize: file.size
                     });
-                    addDocumentTag(data.document_id, data.filename, 'pending');
+                    addDocumentTag(data.document_id, data.filename, 'pending', file.size);
                     // 开始轮询解析状态
                     pollDocumentStatus(data.document_id);
                 } else {
@@ -843,31 +850,66 @@
         }
         
         // 添加文档标签到 UI
-        function addDocumentTag(docId, filename, status) {
+        function addDocumentTag(docId, filename, status, fileSize = 0) {
             const container = document.getElementById('uploadedDocsList');
             const tag = document.createElement('div');
             tag.id = `doc-tag-${docId}`;
             tag.className = 'doc-tag';
             tag.style.cssText = `
-                display: inline-flex; align-items: center; gap: 4px;
-                padding: 4px 10px; background: rgba(78,205,196,0.1);
-                border: 1px solid rgba(78,205,196,0.3); border-radius: 12px;
-                font-size: 11px; color: #4ECDC4; max-width: 150px;
+                display: flex; flex-direction: column; gap: 4px;
+                padding: 8px 12px; background: #f8f9fa;
+                border: 1px solid #e9ecef; border-radius: 8px;
+                font-size: 12px; color: #333; min-width: 180px; max-width: 220px;
             `;
             
-            const statusIcon = getStatusIcon(status);
-            const shortName = filename.length > 12 ? filename.substring(0, 10) + '...' : filename;
-            const spinClass = isSpinningStatus(status) ? 'spinning' : '';
+            const shortName = filename.length > 18 ? filename.substring(0, 16) + '...' : filename;
+            const fileSizeStr = fileSize > 0 ? formatFileSize(fileSize) : '';
+            const statusText = getStatusText(status);
+            const isLoading = isSpinningStatus(status);
             
             tag.innerHTML = `
-                <span class="doc-status ${spinClass}">${statusIcon}</span>
-                <span class="doc-name" title="${filename}">${shortName}</span>
-                <button onclick="removeDocument('${docId}')" style="
-                    background: none; border: none; color: #ff6b6b;
-                    cursor: pointer; font-size: 14px; padding: 0 2px;
-                ">×</button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 18px;">📄</span>
+                    <span class="doc-name" title="${filename}" style="flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${shortName}</span>
+                    <button onclick="removeDocument('${docId}')" style="
+                        background: none; border: none; color: #999;
+                        cursor: pointer; font-size: 16px; padding: 0; line-height: 1;
+                    ">×</button>
+                </div>
+                <div class="doc-progress-row" style="display: flex; align-items: center; gap: 6px; color: #f97316; font-size: 11px;">
+                    ${isLoading ? `
+                        <div style="flex: 1; height: 3px; background: #fee2e2; border-radius: 2px; overflow: hidden;">
+                            <div class="progress-bar" style="width: 30%; height: 100%; background: #f97316; animation: progress-pulse 1.5s ease-in-out infinite;"></div>
+                        </div>
+                        <span class="doc-status-text">${statusText}</span>
+                        ${fileSizeStr ? `<span style="color: #999;">· ${fileSizeStr}</span>` : ''}
+                    ` : `
+                        <span class="doc-status-text" style="color: ${status === 'ready' ? '#22c55e' : status === 'error' ? '#ef4444' : '#f97316'};">${statusText}</span>
+                        ${fileSizeStr ? `<span style="color: #999;">· ${fileSizeStr}</span>` : ''}
+                    `}
+                </div>
             `;
             container.appendChild(tag);
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + 'B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+        }
+        
+        // 获取状态文本
+        function getStatusText(status) {
+            const texts = {
+                'uploading': '上传中...',
+                'pending': '等待解析...',
+                'parsing': '解析中...',
+                'ready': '已就绪',
+                'error': '解析失败',
+                'timeout': '超时'
+            };
+            return texts[status] || status;
         }
         
         // 获取状态图标
@@ -891,26 +933,38 @@
         // 更新文档标签状态
         function updateDocumentTagStatus(docId, status) {
             const tag = document.getElementById(`doc-tag-${docId}`);
-            if (tag) {
-                const statusEl = tag.querySelector('.doc-status');
-                if (statusEl) {
-                    statusEl.textContent = getStatusIcon(status);
-                    // 添加或移除转圈动画
-                    if (isSpinningStatus(status)) {
-                        statusEl.classList.add('spinning');
-                    } else {
-                        statusEl.classList.remove('spinning');
-                    }
+            if (!tag) return;
+            
+            const progressRow = tag.querySelector('.doc-progress-row');
+            const doc = uploadedDocuments.find(d => d.id === docId);
+            const fileSizeStr = doc && doc.fileSize ? formatFileSize(doc.fileSize) : '';
+            const statusText = getStatusText(status);
+            const isLoading = isSpinningStatus(status);
+            
+            if (progressRow) {
+                if (isLoading) {
+                    progressRow.innerHTML = `
+                        <div style="flex: 1; height: 3px; background: #fee2e2; border-radius: 2px; overflow: hidden;">
+                            <div class="progress-bar" style="width: 30%; height: 100%; background: #f97316; animation: progress-pulse 1.5s ease-in-out infinite;"></div>
+                        </div>
+                        <span class="doc-status-text">${statusText}</span>
+                        ${fileSizeStr ? `<span style="color: #999;">· ${fileSizeStr}</span>` : ''}
+                    `;
+                } else {
+                    progressRow.innerHTML = `
+                        <span class="doc-status-text" style="color: ${status === 'ready' ? '#22c55e' : status === 'error' ? '#ef4444' : '#f97316'};">${statusText}</span>
+                        ${fileSizeStr ? `<span style="color: #999;">· ${fileSizeStr}</span>` : ''}
+                    `;
                 }
-                // 根据状态更新样式
-                if (status === 'ready') {
-                    tag.style.borderColor = 'rgba(78,205,196,0.8)';
-                    tag.style.background = 'rgba(78,205,196,0.15)';
-                } else if (status === 'error') {
-                    tag.style.borderColor = 'rgba(255,107,107,0.5)';
-                    tag.style.background = 'rgba(255,107,107,0.1)';
-                    tag.style.color = '#ff6b6b';
-                }
+            }
+            
+            // 根据状态更新边框样式
+            if (status === 'ready') {
+                tag.style.borderColor = '#22c55e';
+                tag.style.background = '#f0fdf4';
+            } else if (status === 'error') {
+                tag.style.borderColor = '#ef4444';
+                tag.style.background = '#fef2f2';
             }
         }
         

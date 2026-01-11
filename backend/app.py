@@ -122,7 +122,8 @@ def create_app(config_class=None):
         init_file_parser(
             mineru_token=mineru_token,
             mineru_api_base=app.config.get('MINERU_API_BASE', 'https://mineru.net'),
-            upload_folder=upload_folder
+            upload_folder=upload_folder,
+            pdf_max_pages=int(os.getenv('PDF_MAX_PAGES', '15'))
         )
         logger.info("文件解析服务已初始化")
     else:

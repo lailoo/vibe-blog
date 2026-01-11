@@ -33,7 +33,8 @@ class FileParserService:
         self,
         mineru_token: str,
         mineru_api_base: str = "https://mineru.net",
-        upload_folder: str = ""
+        upload_folder: str = "",
+        pdf_max_pages: int = 15
     ):
         """
         初始化文件解析服务
@@ -42,6 +43,7 @@ class FileParserService:
             mineru_token: MinerU API Token
             mineru_api_base: MinerU API 基础 URL
             upload_folder: 上传文件存储目录
+            pdf_max_pages: PDF 最大页数限制
         """
         self.mineru_token = mineru_token
         self.mineru_api_base = mineru_api_base
@@ -49,8 +51,9 @@ class FileParserService:
         self.result_api_template = f"{mineru_api_base}/api/v4/extract-results/batch/{{}}"
         
         self.upload_folder = upload_folder or str(Path(__file__).parent.parent / 'uploads')
+        self.pdf_max_pages = pdf_max_pages
         
-        logger.info(f"FileParserService 初始化完成, upload_folder={self.upload_folder}")
+        logger.info(f"FileParserService 初始化完成, upload_folder={self.upload_folder}, pdf_max_pages={self.pdf_max_pages}")
     
     def parse_file(
         self, 
@@ -86,6 +89,21 @@ class FileParserService:
                     on_progress(1, 1, "读取文本文件", filename)
                 return self._parse_text_file(file_path)
             
+            # PDF 文件检查页数限制
+            if file_ext == 'pdf':
+                page_count = self._get_pdf_page_count(file_path)
+                if page_count > self.pdf_max_pages:
+                    logger.warning(f"PDF 页数超限: {page_count} 页 (最大 {self.pdf_max_pages} 页)")
+                    return {
+                        'success': False,
+                        'batch_id': None,
+                        'markdown': None,
+                        'images': None,
+                        'mineru_folder': None,
+                        'error': f'PDF 页数超过限制：{page_count} 页（最大支持 {self.pdf_max_pages} 页）'
+                    }
+                logger.info(f"PDF 页数检查通过: {page_count} 页")
+            
             # 其他文件使用 MinerU 解析
             logger.info(f"使用 MinerU 解析文件: {filename}")
             return self._parse_with_mineru(file_path, filename, on_progress)
@@ -100,6 +118,27 @@ class FileParserService:
                 'mineru_folder': None,
                 'error': str(e)
             }
+    
+    def _get_pdf_page_count(self, file_path: str) -> int:
+        """获取 PDF 页数"""
+        try:
+            with open(file_path, 'rb') as f:
+                content = f.read()
+                # 简单方法：统计 /Type /Page 出现次数（不包括 /Pages）
+                # 更准确的方法需要用 PyPDF2，但这里用简单方法避免额外依赖
+                # 匹配 /Type /Page 但不匹配 /Type /Pages
+                pages = re.findall(rb'/Type\s*/Page[^s]', content)
+                count = len(pages)
+                if count == 0:
+                    # 备用方法：查找 /Count 字段
+                    count_match = re.search(rb'/Count\s+(\d+)', content)
+                    if count_match:
+                        count = int(count_match.group(1))
+                logger.info(f"PDF 页数检测: {count} 页")
+                return count if count > 0 else 1
+        except Exception as e:
+            logger.warning(f"无法获取 PDF 页数: {e}")
+            return 0
     
     def _parse_text_file(self, file_path: str) -> dict:
         """解析纯文本文件"""
@@ -714,14 +753,16 @@ def get_file_parser() -> Optional[FileParserService]:
 def init_file_parser(
     mineru_token: str,
     mineru_api_base: str = "https://mineru.net",
-    upload_folder: str = ""
+    upload_folder: str = "",
+    pdf_max_pages: int = 15
 ) -> FileParserService:
     """初始化文件解析服务"""
     global _file_parser
     _file_parser = FileParserService(
         mineru_token=mineru_token,
         mineru_api_base=mineru_api_base,
-        upload_folder=upload_folder
+        upload_folder=upload_folder,
+        pdf_max_pages=pdf_max_pages
     )
     return _file_parser
 
