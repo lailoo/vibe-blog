@@ -1768,8 +1768,16 @@
                     const block = mermaidBlocks[i];
                     let code = block.textContent;
                     
-                    // 清理特殊引号
-                    code = code.replace(/[""'']/g, '"');
+                    // 预处理 Mermaid 代码，修复常见语法问题
+                    code = code.replace(/[""'']/g, '"');  // 清理特殊引号
+                    code = code.replace(/（/g, '(').replace(/）/g, ')');  // 中文括号转英文
+                    code = code.replace(/【/g, '[').replace(/】/g, ']');  // 中文方括号转英文
+                    code = code.replace(/：/g, ':');  // 中文冒号转英文
+                    code = code.replace(/；/g, ';');  // 中文分号转英文
+                    code = code.replace(/，/g, ',');  // 中文逗号转英文
+                    // 处理节点文本中的特殊字符：将 \n 替换为 <br>，用引号包裹含特殊字符的文本
+                    code = code.replace(/\[([^\]]*?)\\n([^\]]*?)\]/g, '["$1<br/>$2"]');  // \n 换行
+                    code = code.replace(/\[([^\]"]*?\/[^\]"]*?)\]/g, '["$1"]');  // 包含 / 的文本用引号包裹
                     
                     const div = document.createElement('div');
                     div.className = 'mermaid';
