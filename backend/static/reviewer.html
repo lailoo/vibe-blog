@@ -1495,6 +1495,11 @@
                     code = code.replace(/；/g, ';');  // 中文分号转英文
                     code = code.replace(/，/g, ',');  // 中文逗号转英文
                     
+                    // 修复 subgraph 空标签问题：subgraph xxx[""] -> subgraph xxx[" "]
+                    code = code.replace(/(\bsubgraph\s+\w+)\[""\]/g, '$1[" "]');
+                    // 修复节点空标签问题：xxx[""] -> xxx[" "]
+                    code = code.replace(/(\w+)\[""\]/g, '$1[" "]');
+                    
                     // 处理节点文本中的特殊字符
                     code = code.replace(/\[([^\]]+)\]/g, (match, content) => {
                         if (content.startsWith('"') && content.endsWith('"')) return match;

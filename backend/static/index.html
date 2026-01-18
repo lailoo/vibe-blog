@@ -453,6 +453,27 @@
         }
         .history-card:hover .delete-btn { opacity: 1; }
         .history-card .delete-btn:hover { background: #ff6b6b; }
+        .history-card .book-tag {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: rgba(102, 126, 234, 0.9);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            cursor: pointer;
+            z-index: 10;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .history-card .book-tag:hover {
+            background: rgba(102, 126, 234, 1);
+            transform: scale(1.05);
+        }
         .history-cover {
             height: 120px;
             background: linear-gradient(135deg, #4ECDC4, #44A08D);
@@ -520,6 +541,145 @@
             font-size: 13px;
             color: rgba(0,0,0,0.5);
             padding: 0 8px;
+        }
+        
+        /* 历史记录 Tab 切换 */
+        .history-tab {
+            padding: 8px 16px;
+            border: 1px solid rgba(0,0,0,0.1);
+            background: rgba(255,255,255,0.8);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            transition: all 0.2s;
+        }
+        .history-tab:hover {
+            background: rgba(0,0,0,0.05);
+        }
+        .history-tab.active {
+            background: linear-gradient(135deg, #4ECDC4, #44a08d);
+            color: white;
+            border-color: #4ECDC4;
+        }
+        .history-tab .history-total,
+        .history-tab .books-total {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        .scan-books-btn {
+            padding: 8px 16px;
+            border: 1px solid #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .scan-books-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .scan-books-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* 书籍网格 */
+        .books-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 20px;
+            justify-items: center;
+        }
+        .book-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .book-card:hover {
+            transform: translateY(-6px);
+        }
+        .book-cover {
+            width: 110px;
+            height: 150px;
+            border-radius: 4px 10px 10px 4px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15), -2px 0 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .book-card:hover .book-cover {
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25), -2px 0 8px rgba(0, 0, 0, 0.1);
+        }
+        .book-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .book-cover::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 6px;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(0, 0, 0, 0.25) 0%, transparent 100%);
+        }
+        .book-cover-default {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            text-align: center;
+        }
+        .book-cover-default .book-icon {
+            font-size: 32px;
+            margin-bottom: 6px;
+        }
+        .book-cover-default .book-title-inner {
+            font-size: 11px;
+            font-weight: 600;
+            color: #fff;
+            line-height: 1.3;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        .theme-ai { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .theme-web { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .theme-data { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .theme-devops { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .theme-security { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .theme-general { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
+        .book-title {
+            margin-top: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+            text-align: center;
+            max-width: 120px;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .book-stats {
+            margin-top: 4px;
+            font-size: 10px;
+            color: #888;
+            display: flex;
+            gap: 6px;
         }
 
         @media (max-width: 768px) {
@@ -830,12 +990,29 @@
     <!-- 历史记录区域 -->
     <section class="history-section" id="historySection">
         <div class="history-header">
-            <h2 class="section-title">📜 历史记录 <span class="history-total" id="historyTotal"></span></h2>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div class="history-tabs" style="display: flex; gap: 8px;">
+                    <button class="history-tab active" data-tab="blogs" onclick="switchHistoryTab('blogs')">
+                        📝 历史博客 <span class="history-total" id="historyTotal"></span>
+                    </button>
+                    <button class="history-tab" data-tab="books" onclick="switchHistoryTab('books')">
+                        📚 教程列表 <span class="books-total" id="booksTotal"></span>
+                    </button>
+                </div>
+            </div>
+            <button class="scan-books-btn" id="scanBooksBtn" style="display: none;" onclick="scanBooks()">
+                🔄 扫描聚合
+            </button>
         </div>
+        <!-- 博客列表 -->
         <div class="history-grid" id="historyGrid">
             <div class="history-empty">暂无历史记录，生成博客后将自动保存</div>
         </div>
         <div class="history-pagination" id="historyPagination"></div>
+        <!-- 书籍列表 -->
+        <div class="books-grid" id="booksGrid" style="display: none;">
+            <div class="history-empty">暂无教程书籍，点击「扫描聚合」自动生成</div>
+        </div>
     </section>
 
     <script>
@@ -864,10 +1041,16 @@
                 const response = await fetch('/api/config');
                 const data = await response.json();
                 if (data.success && data.config) {
+                    const features = data.config.features || {};
                     // 根据配置显示/隐藏 reviewer 入口
-                    if (data.config.reviewer_enabled) {
+                    if (features.reviewer) {
                         const reviewerTab = document.getElementById('reviewerTab');
                         if (reviewerTab) reviewerTab.style.display = 'block';
+                    }
+                    // 根据配置显示/隐藏封面动画选项
+                    if (!features.cover_video) {
+                        const coverVideoContainer = document.getElementById('generateCoverVideoCheckbox')?.parentElement?.parentElement;
+                        if (coverVideoContainer) coverVideoContainer.style.display = 'none';
                     }
                 }
             } catch (e) {
@@ -1907,6 +2090,11 @@
                     code = code.replace(/；/g, ';');  // 中文分号转英文
                     code = code.replace(/，/g, ',');  // 中文逗号转英文
                     
+                    // 修复 subgraph 空标签问题：subgraph xxx[""] -> subgraph xxx[" "]
+                    code = code.replace(/(\bsubgraph\s+\w+)\[""\]/g, '$1[" "]');
+                    // 修复节点空标签问题：xxx[""] -> xxx[" "]
+                    code = code.replace(/(\w+)\[""\]/g, '$1[" "]');
+                    
                     // 处理节点文本中的特殊字符
                     // 匹配 [...] 节点，处理其中的特殊字符
                     code = code.replace(/\[([^\]]+)\]/g, (match, content) => {
@@ -2305,9 +2493,15 @@
                 const typeMap = { 'tutorial': '教程', 'problem-solution': '问题解决', 'comparison': '对比分析', 'storybook': '绘本' };
                 const lengthMap = { 'short': '短文', 'medium': '中等', 'long': '长文' };
                 
+                // 归属书籍标签
+                const bookTag = record.book_title 
+                    ? `<span class="book-tag" onclick="event.stopPropagation(); openBook('${record.book_id}')" title="查看书籍">📖 ${escapeHtml(record.book_title)}</span>` 
+                    : '';
+                
                 return `
                     <div class="history-card" data-id="${record.id}">
                         <button class="delete-btn" onclick="deleteHistory(event, '${record.id}')" title="删除">×</button>
+                        ${bookTag}
                         <div class="history-cover">${coverHtml}</div>
                         <div class="history-content">
                             <div class="history-topic">${escapeHtml(record.topic)}</div>
@@ -2443,18 +2637,192 @@
             }
         }
         
-        // 页面加载时获取历史记录
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                loadHistory();
-                loadImageStyles();
-                initAdvancedOptions();
+        // ========== 书籍/教程列表功能 ==========
+        
+        let currentHistoryTab = 'blogs';
+        const themeIcons = {
+            ai: '🤖',
+            web: '🌐',
+            data: '📊',
+            devops: '⚙️',
+            security: '🔐',
+            general: '📖'
+        };
+        
+        // 切换历史记录 Tab
+        function switchHistoryTab(tab) {
+            currentHistoryTab = tab;
+            
+            // 更新 Tab 样式
+            document.querySelectorAll('.history-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === tab);
             });
-        } else {
-            // DOM 已经加载完成，直接执行
+            
+            // 切换显示内容
+            const historyGrid = document.getElementById('historyGrid');
+            const historyPagination = document.getElementById('historyPagination');
+            const booksGrid = document.getElementById('booksGrid');
+            const scanBtn = document.getElementById('scanBooksBtn');
+            
+            if (tab === 'blogs') {
+                historyGrid.style.display = 'grid';
+                historyPagination.style.display = 'flex';
+                booksGrid.style.display = 'none';
+                scanBtn.style.display = 'none';
+            } else {
+                historyGrid.style.display = 'none';
+                historyPagination.style.display = 'none';
+                booksGrid.style.display = 'grid';
+                // 根据配置决定是否显示扫描聚合按钮
+                const features = window.appConfig?.features || {};
+                if (features.book_scan) {
+                    scanBtn.style.display = 'block';
+                } else {
+                    scanBtn.style.display = 'none';
+                }
+                loadBooks();
+            }
+        }
+        
+        // 加载书籍列表
+        async function loadBooks() {
+            const grid = document.getElementById('booksGrid');
+            grid.innerHTML = '<div class="history-empty">加载中...</div>';
+            
+            try {
+                const response = await fetch('/api/books');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const totalEl = document.getElementById('booksTotal');
+                    if (totalEl) {
+                        totalEl.textContent = data.books.length > 0 ? `(${data.books.length})` : '';
+                    }
+                    renderBooksList(data.books);
+                } else {
+                    grid.innerHTML = '<div class="history-empty">加载失败</div>';
+                }
+            } catch (error) {
+                console.error('加载书籍失败:', error);
+                grid.innerHTML = '<div class="history-empty">加载失败</div>';
+            }
+        }
+        
+        // 渲染书籍列表
+        function renderBooksList(books) {
+            const grid = document.getElementById('booksGrid');
+            
+            if (!books || books.length === 0) {
+                grid.innerHTML = '<div class="history-empty">暂无教程书籍，点击「扫描聚合」自动生成</div>';
+                return;
+            }
+            
+            grid.innerHTML = books.map(book => {
+                const theme = book.theme || 'general';
+                const icon = themeIcons[theme] || '📖';
+                const wordCount = book.total_word_count >= 10000 
+                    ? (book.total_word_count / 10000).toFixed(1) + '万' 
+                    : book.total_word_count || 0;
+                
+                return `
+                    <div class="book-card" onclick="openBook('${book.id}')">
+                        <div class="book-cover">
+                            ${book.cover_image 
+                                ? `<img src="${book.cover_image}" alt="${book.title}" onerror="this.parentElement.innerHTML=getDefaultCover('${theme}', '${escapeHtml(book.title)}')">`
+                                : `<div class="book-cover-default theme-${theme}">
+                                    <span class="book-icon">${icon}</span>
+                                    <span class="book-title-inner">${escapeHtml(book.title)}</span>
+                                   </div>`
+                            }
+                        </div>
+                        <div class="book-title">${escapeHtml(book.title)}</div>
+                        <div class="book-stats">
+                            <span>${book.chapters_count || 0}章</span>
+                            <span>${wordCount}字</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 获取默认封面 HTML
+        function getDefaultCover(theme, title) {
+            const icon = themeIcons[theme] || '📖';
+            return `<div class="book-cover-default theme-${theme}">
+                <span class="book-icon">${icon}</span>
+                <span class="book-title-inner">${title}</span>
+            </div>`;
+        }
+        
+        // 打开书籍阅读器
+        function openBook(bookId) {
+            window.location.href = `/static/book-reader.html?id=${bookId}`;
+        }
+        
+        // 扫描聚合书籍
+        async function scanBooks() {
+            const btn = document.getElementById('scanBooksBtn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '⏳ 扫描中...';
+            
+            try {
+                const response = await fetch('/api/books/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`扫描完成！\n创建 ${data.books_created || 0} 本新书\n更新 ${data.books_updated || 0} 本书`);
+                    loadBooks();
+                } else {
+                    alert('扫描失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('扫描失败:', error);
+                alert('扫描失败: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+        
+        // 页面加载时获取历史记录
+        async function initPage() {
+            // 加载前端配置
+            await loadAppConfig();
+            
             loadHistory();
             loadImageStyles();
             initAdvancedOptions();
+            
+            // 检查 URL 参数，自动切换到教程列表
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('tab') === 'books') {
+                switchHistoryTab('books');
+            }
+        }
+        
+        // 加载应用配置
+        async function loadAppConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const data = await response.json();
+                if (data.success && data.config) {
+                    window.appConfig = data.config;
+                }
+            } catch (e) {
+                console.warn('加载配置失败:', e);
+                window.appConfig = {};
+            }
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initPage);
+        } else {
+            // DOM 已经加载完成，直接执行
+            initPage();
         }
         
         // ========== 高级选项功能 ==========

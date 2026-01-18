@@ -326,13 +326,67 @@ class PromptManager:
         """渲染搜索源路由 Prompt"""
         return self.render('search_router', topic=topic)
     
-    def render_article_summary(self, title: str, content: str) -> str:
+    def render_article_summary(self, title: str, content: str, max_length: int = None) -> str:
         """渲染文章摘要提炼 Prompt"""
-        return self.render('article_summary', title=title, content=content)
+        return self.render('article_summary', title=title, content=content, max_length=max_length)
     
     def render_artist_default(self, prompt: str, caption: str) -> str:
         """渲染默认图片生成 Prompt（卡通手绘风格）"""
         return self.render('artist_default', prompt=prompt, caption=caption)
+    
+    def render_book_scanner(
+        self,
+        existing_books_info: str,
+        new_blogs_info: str
+    ) -> str:
+        """渲染书籍扫描决策 Prompt"""
+        return self.render(
+            'book_scanner',
+            existing_books_info=existing_books_info,
+            new_blogs_info=new_blogs_info
+        )
+    
+    def render_book_introduction(
+        self,
+        book_title: str,
+        book_theme: str,
+        chapters_count: int,
+        chapters: list
+    ) -> str:
+        """渲染书籍简介生成 Prompt"""
+        return self.render(
+            'book_introduction',
+            book_title=book_title,
+            book_theme=book_theme,
+            chapters_count=chapters_count,
+            chapters=chapters
+        )
+    
+    def render_outline_expander(
+        self,
+        book: dict,
+        existing_chapters: list,
+        search_results: list = None
+    ) -> str:
+        """渲染大纲扩展 Prompt"""
+        return self.render(
+            'outline_expander',
+            book=book,
+            existing_chapters=existing_chapters or [],
+            search_results=search_results or []
+        )
+    
+    def render_homepage_generator(
+        self,
+        book: dict,
+        outline: dict
+    ) -> str:
+        """渲染首页生成 Prompt"""
+        return self.render(
+            'homepage_generator',
+            book=book,
+            outline=outline or {}
+        )
 
 
 # 全局实例
