@@ -4,6 +4,9 @@
 
 import logging
 import os
+import threading
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional, Literal, Callable
 
 from langgraph.graph import StateGraph, START, END
@@ -129,6 +132,11 @@ class BlogGenerator:
         # 业务级状态追踪（69.05）
         self.tracker = SessionTracker()
         self.summary_generator = SummaryGeneratorAgent(_proxy('summary_generator')) if self._env_summary else None
+
+        # 配图异步任务字典：避免把 Future 对象放入 LangGraph state 导致 msgpack 序列化失败
+        # key = 随机字符串（存在 state['_image_task_id']），value = (Future, ThreadPoolExecutor)
+        self._image_tasks: dict = {}
+        self._image_tasks_lock = threading.Lock()
 
         # 37.12 分层架构校验器（可选）
         self._layer_validator = None
@@ -720,19 +728,24 @@ class BlogGenerator:
         logger.info(f"代码生成完成: {code_count} 个代码块")
 
         # 2. 配图生成（后台异步）
-        from concurrent.futures import ThreadPoolExecutor
         image_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="artist")
         future = image_executor.submit(self.artist.run, state)
-        state['_image_future'] = future
-        state['_image_executor'] = image_executor
+
+        # 将 Future 存到实例字典，而非 state，避免 LangGraph msgpack 序列化失败
+        image_task_id = str(uuid.uuid4())
+        with self._image_tasks_lock:
+            self._image_tasks[image_task_id] = (future, image_executor)
+        state['_image_task_id'] = image_task_id
         logger.info("配图生成已异步启动，不阻塞后续流程")
 
         return state
 
     def _wait_for_images_node(self, state: SharedState) -> SharedState:
         """等待异步配图生成完成，合并结果到 state"""
-        future = state.pop('_image_future', None)
-        executor = state.pop('_image_executor', None)
+        image_task_id = state.pop('_image_task_id', None)
+        with self._image_tasks_lock:
+            future, executor = self._image_tasks.pop(image_task_id, (None, None)) \
+                if image_task_id else (None, None)
 
         if future is None:
             logger.warning("无配图异步任务，跳过等待")
@@ -895,7 +908,7 @@ class BlogGenerator:
                     break
 
         results = self.executor.run_parallel(tasks, config=TaskConfig(
-            name="revision_enhance", timeout_seconds=120,
+            name="revision_enhance", timeout_seconds=240,
         ))
 
         for i, r in enumerate(results):

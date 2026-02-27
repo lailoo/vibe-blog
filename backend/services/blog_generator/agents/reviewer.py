@@ -123,15 +123,65 @@ class ReviewerAgent:
 
         outline = state.get('outline', {})
 
-        # 组装文档
-        document_parts = []
+        # 构建「结构骨架」：标题 + 字数 + 子章节标题列表（或首段预览）
+        # 通过提取正文中的 ### / ## 子标题，让 Reviewer 能判断子章节是否覆盖大纲要点
+        # 避免仅凭 150 字预览把"骨架看不到"的子节误报为缺失
+        skeleton_parts = []
         for section in sections:
-            document_parts.append(f"## {section.get('title', '')}\n\n{section.get('content', '')}")
-        document = '\n\n---\n\n'.join(document_parts)
+            title   = section.get('title', '（无标题）')
+            content = section.get('content', '')
 
-        logger.info("开始质量审核")
+            # 提取子标题（只取 ### 级，## 级通常是章节自身标题，已在骨架顶行体现）
+            # 跳过代码块内的 ### 避免误判
+            sub_headings = []
+            in_code_block = False
+            for line in content.split('\n'):
+                stripped = line.strip()
+                if stripped.startswith('```'):
+                    in_code_block = not in_code_block
+                    continue
+                if in_code_block:
+                    continue
+                if stripped.startswith('### '):
+                    heading_text = stripped[4:].strip()
+                    if heading_text:
+                        sub_headings.append(heading_text)
 
-        verbatim_data = state.get('verbatim_data', [])
+            if sub_headings:
+                sub_info = '\n'.join(f'  - {h}' for h in sub_headings)
+                skeleton_parts.append(
+                    f"## {title}\n（本节约 {len(content)} 字）\n子章节:\n{sub_info}"
+                )
+            else:
+                # 无子标题时退回首段预览
+                preview = content[:150].replace('\n', ' ').strip()
+                if len(content) > 150:
+                    preview += '…'
+                skeleton_parts.append(
+                    f"## {title}\n（本节约 {len(content)} 字）\n> {preview}"
+                )
+        document = '\n\n'.join(skeleton_parts)
+
+        logger.info(f"开始质量审核（骨架模式: {len(document)} 字 / 原文 "
+                    f"{sum(len(s.get('content','')) for s in sections)} 字）")
+
+        # Python 侧预检 verbatim：只把「真正缺失」的项传给 LLM
+        # 避免 LLM 因看不到全文而误报 verbatim 违规
+        raw_verbatim = state.get('verbatim_data', [])
+        if raw_verbatim:
+            full_document = '\n\n'.join(
+                section.get('content', '') for section in sections
+            )
+            verbatim_data = [
+                item for item in raw_verbatim
+                if item.get('value', '') not in full_document
+            ]
+            skipped = len(raw_verbatim) - len(verbatim_data)
+            if skipped:
+                logger.info(f"[Reviewer] Verbatim 预检: {skipped} 项已在原文中，跳过")
+        else:
+            verbatim_data = []
+
         learning_objectives = state.get('learning_objectives', [])
 
         # 41.11: 从 state 获取审核标准（StyleProfile 或按文章类型自动匹配）
