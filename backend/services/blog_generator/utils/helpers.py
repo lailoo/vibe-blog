@@ -223,13 +223,18 @@ def replace_placeholders(
             elif render_method == 'ai_image':
                 rendered_path = img.get('rendered_path') or 'placeholder.png'
                 caption = img.get('caption', '')
-                replacement = f"![{caption}]({rendered_path})\n\n*{caption}*"
+                # 只用 alt text，不再额外输出斜体 caption，避免与章节标题视觉重复
+                replacement = f"![{caption}]({rendered_path})"
             else:
                 rendered_path = img.get('rendered_path') or 'placeholder.png'
                 replacement = f"![{img.get('caption', '')}]({rendered_path})"
             
             result = result[:match.start()] + replacement + result[match.end():]
-    
+
+    # 清理未被替换的图片占位符（图片数量不足或生成失败的情况）
+    remaining_image_pattern = r'\[IMAGE:\s*[^\]]+\]\n?'
+    result = re.sub(remaining_image_pattern, '', result)
+
     return result
 
 

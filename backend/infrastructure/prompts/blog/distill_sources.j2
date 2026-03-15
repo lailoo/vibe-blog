@@ -1,0 +1,61 @@
+你是一个专业的技术内容分析师。请对以下搜索结果进行深度提炼。
+
+## 主题
+{{ topic }}
+
+## 搜索结果
+{% for result in search_results %}
+### 来源 {{ loop.index }}: {{ result.get('title', '未知标题') }}
+URL: {{ result.get('url', result.get('source', '')) }}
+内容摘要: {{ result.get('content', '')[:500] }}
+
+{% endfor %}
+
+## 分析任务
+
+### 1. 逐条提炼
+对每条搜索结果，提取：
+- **核心观点**：这条结果最重要的 1-2 个观点
+- **关键数据**：任何具体的数字、统计、性能指标（必须原样保留）
+- **独特视角**：这条结果有什么别的来源没有的信息
+- **内容分类**：concept（概念解释）/ case（实践案例）/ data（数据统计）/ comparison（对比分析）/ tutorial（教程步骤）
+- **可信度**：high（官方文档/权威博客）/ medium（技术博客）/ low（论坛/问答）
+
+### 2. 语义级去重与合并
+- **完全重复**：多条结果讲的是同一件事 → 合并为一条，保留最权威来源的 URL
+- **部分重叠**：核心观点相同但各有补充 → 合并观点，保留所有独特数据点
+- **观点冲突**：内容相似但结论不同 → 不合并，标记为矛盾点
+
+### 3. 跨源分析
+- **共同主题**：多个来源都提到的关键点（说明这是共识）
+- **矛盾点**：不同来源的观点冲突（说明这是争议点，可以深入讨论）
+- **素材分类汇总**：按 concept/case/data/comparison 分类整理所有素材
+
+## 输出格式
+严格返回以下 JSON 格式（不要输出其他内容）：
+```json
+{
+  "sources": [
+    {
+      "title": "原标题",
+      "url": "原链接",
+      "core_insight": "核心观点（1-2句话）",
+      "key_data": ["数据1", "数据2"],
+      "unique_perspective": "独特视角",
+      "content_type": "concept|case|data|comparison|tutorial",
+      "credibility": "high|medium|low",
+      "relevance_score": 1
+    }
+  ],
+  "common_themes": ["主题1", "主题2"],
+  "contradictions": [
+    {"point": "争议点", "side_a": "观点A", "side_b": "观点B"}
+  ],
+  "material_by_type": {
+    "concepts": ["概念1", "概念2"],
+    "cases": ["案例1"],
+    "data": ["数据点1"],
+    "comparisons": ["对比1"]
+  }
+}
+```

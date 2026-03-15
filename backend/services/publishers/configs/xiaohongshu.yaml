@@ -1,0 +1,114 @@
+# 小红书平台发布配置
+# 注意：小红书以图片为主，文字为辅
+
+platform:
+  id: xiaohongshu
+  name: 小红书
+  editor_url: https://creator.xiaohongshu.com/publish/publish?source=official
+  cookie_domain: .xiaohongshu.com
+
+# 登录检测
+login_check:
+  type: url_not_contains
+  value: login
+
+# 内容上传方式：图片上传 + 文案填写
+content_upload:
+  type: xhs_images
+  # 图片上传区域
+  image_upload_selector: 'input[type="file"][accept*="image"]'
+  # 标题输入框
+  title_selector: '.c-input_inner, input[placeholder*="标题"], #title-input'
+  # 正文输入框
+  content_selector: '.ql-editor, .c-input_inner[placeholder*="正文"], #post-textarea'
+  wait_after: 3000
+
+# 发布工作流
+workflow:
+  - action: js_eval
+    name: 关闭弹窗并切换到图片上传Tab
+    script: |
+      // 先关闭"立即体验"弹窗（如果存在）
+      const closeButtons = document.querySelectorAll('[class*="close"], .close-btn, button[aria-label="关闭"], .modal-close');
+      closeButtons.forEach(btn => btn.click());
+      // 点击弹窗外部关闭
+      const overlay = document.querySelector('.modal-overlay, .mask, [class*="overlay"]');
+      if (overlay) overlay.click();
+      // 按 ESC 键关闭弹窗
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27 }));
+    wait_after: 500
+
+  - action: js_eval
+    name: 切换到图片上传Tab
+    script: |
+      // 点击"上传图文"或"图片"tab
+      const tabs = document.querySelectorAll('.tab, .creator-tab, [class*="tab"]');
+      for (const tab of tabs) {
+        if (tab.textContent.includes('图文') || tab.textContent.includes('图片')) {
+          tab.click();
+          break;
+        }
+      }
+      // 备选：直接点击包含"图片"文字的元素
+      const imgTab = document.evaluate("//span[contains(text(),'图文')] | //div[contains(text(),'图片')]", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      if (imgTab) imgTab.click();
+    wait_after: 1500
+
+  - action: wait_for_images
+    name: 等待图片上传完成
+    timeout: 60000
+    wait_after: 2000
+  
+  - action: fill
+    name: 填写标题
+    selector: '.c-input_inner input, input[placeholder*="标题"], #title-input, .d-input-wrapper input'
+    value: "{{title}}"
+    wait_after: 500
+  
+  - action: js_eval
+    name: 填写正文
+    script: |
+      const editor = document.querySelector('.ql-editor, .c-input_inner[placeholder*="正文"], #post-textarea');
+      if (editor) {
+        editor.innerHTML = '';
+        editor.focus();
+      }
+    wait_after: 300
+  
+  - action: type
+    name: 输入正文内容
+    text: "{{content}}"
+    delay: 10
+    wait_after: 500
+  
+  - action: xhs_add_tags
+    name: 添加话题标签
+    tag_button_selector: '#hash-tag-input, .add-topic, .topic-btn, [class*="topic"], [class*="hash"]'
+    tag_input_selector: '#hash-tag-input input, .topic-input input, input[placeholder*="话题"], input[placeholder*="输入"]'
+    tag_suggestion_selector: '.topic-item, .search-item, [class*="suggest"], [class*="result"] li'
+    wait_after: 1500
+  
+  - action: click
+    name: 点击发布按钮
+    selector: '.publishBtn, .publish-btn, button[class*="publish"], .red-btn'
+    wait_after: 10000
+
+# 获取发布后的笔记 URL
+result_url:
+  type: js_eval
+  script: |
+    // 小红书发布后通常会跳转到笔记详情页
+    if (window.location.href.includes('/explore/')) {
+      return window.location.href;
+    }
+    // 或者从成功弹窗中获取
+    const link = document.querySelector('a[href*="/explore/"], .success-link a');
+    return link ? link.href : null;
+  wait_seconds: 15
+
+# 小红书不需要 header/footer
+header:
+  enabled: false
+
+footer:
+  enabled: false

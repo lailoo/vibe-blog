@@ -4,6 +4,8 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args:
+        ENABLE_PUBLISHER: "false"  # 改成 "true" 启用发布功能（增加 167 MB）
     container_name: vibe-blog-backend
     ports:
       - "5000:5000"
@@ -20,6 +22,11 @@ services:
       - LOG_DIR=/app/logs
       - OUTPUT_FOLDER=/app/outputs
       - UPLOAD_FOLDER=/app/uploads
+      # 飞书机器人（对话式写作入口）
+      - FEISHU_APP_ID=${FEISHU_APP_ID:-}
+      - FEISHU_APP_SECRET=${FEISHU_APP_SECRET:-}
+      - FEISHU_VERIFICATION_TOKEN=${FEISHU_VERIFICATION_TOKEN:-}
+      - FEISHU_ENCRYPT_KEY=${FEISHU_ENCRYPT_KEY:-}
     logging:
       driver: "local"
       options:
@@ -32,7 +39,19 @@ services:
       timeout: 10s
       retries: 3
 
-  # Nginx 反向代理 (可选，用于生产环境)
+  # Vue 前端 - vibe-blog
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: vibe-blog-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Nginx 反向代理 (生产环境)
   nginx:
     image: nginx:alpine
     container_name: vibe-blog-nginx
@@ -44,4 +63,5 @@ services:
       - ../ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend
+      - frontend
     restart: unless-stopped

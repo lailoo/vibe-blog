@@ -1,0 +1,93 @@
+{
+  "feature": "65-factcheck",
+  "factcheck_report": {
+    "overall_score": 3,
+    "total_claims": 5,
+    "supported": 3,
+    "contradicted": 2,
+    "unverified": 0,
+    "claims": [
+      {
+        "id": 1,
+        "claim": "Transformer由OpenAI在2015年提出",
+        "section_id": "section_1",
+        "verdict": "CONTRADICTED"
+      },
+      {
+        "id": 2,
+        "claim": "Transformer达到28.4 BLEU分数",
+        "section_id": "section_1",
+        "verdict": "SUPPORTED"
+      },
+      {
+        "id": 3,
+        "claim": "BERT-base包含24层3.4亿参数",
+        "section_id": "section_2",
+        "verdict": "CONTRADICTED"
+      },
+      {
+        "id": 4,
+        "claim": "GPT-3拥有1750亿参数",
+        "section_id": "section_2",
+        "verdict": "SUPPORTED"
+      },
+      {
+        "id": 5,
+        "claim": "LLaMA 2由Meta在2023年开源",
+        "section_id": "section_3",
+        "verdict": "SUPPORTED"
+      }
+    ],
+    "fix_instructions": [
+      {
+        "section_id": "section_1",
+        "action": "replace",
+        "original": "Transformer由OpenAI在2015年提出",
+        "replacement": "Transformer由Google Brain在2017年提出"
+      },
+      {
+        "section_id": "section_2",
+        "action": "replace",
+        "original": "BERT-base包含24层3.4亿参数",
+        "replacement": "BERT-base包含12层1.1亿参数"
+      }
+    ]
+  },
+  "judge_eval": {
+    "checks": {
+      "F1_contradiction_detected": {
+        "result": "pass",
+        "reason": "检出2处CONTRADICTED"
+      },
+      "F2_supported_detected": {
+        "result": "pass",
+        "reason": "3条SUPPORTED正确"
+      },
+      "F3_unverified_detected": {
+        "result": "fail",
+        "reason": "未标记UNVERIFIED"
+      },
+      "F4_fix_instructions": {
+        "result": "pass",
+        "reason": "修复指令合理"
+      },
+      "F5_score_reasonable": {
+        "result": "pass",
+        "reason": "评分3合理"
+      },
+      "F6_no_false_positive": {
+        "result": "pass",
+        "reason": "无误报情况"
+      }
+    },
+    "pass_count": 5,
+    "total": 6,
+    "verdict": "FAIL",
+    "summary": "Agent未检出无证据Claim，其他表现良好。"
+  },
+  "pass_count": 5,
+  "total": 6,
+  "verdict": "PASS",
+  "elapsed": 15.194031000137329,
+  "timestamp": "2026-02-11T02:58:05.708598"
+}

@@ -1,0 +1,36 @@
+
+---
+
+## 总结
+
+{% for point in summary_points %}
+- {{ point }}
+{% endfor %}
+
+## 延伸阅读
+
+{{ next_steps }}
+
+{% if reference_links or document_references %}
+## 参考资料
+
+{% if document_references %}
+### 📄 文档来源
+
+{% for ref in document_references %}
+- {{ ref.title }}{% if ref.file_name %} (`{{ ref.file_name }}`){% endif %}
+
+{% endfor %}
+{% endif %}
+{% if reference_links %}
+### 🌐 网络来源
+
+{% for link in reference_links %}
+{% if link is mapping %}
+{% if link.ref_id %}<a id="{{ link.ref_id }}"></a>{% endif %}{{ loop.index }}. [{{ link.title or link.url }}]({{ link.url }})
+{% else %}
+{{ loop.index }}. {{ link }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}

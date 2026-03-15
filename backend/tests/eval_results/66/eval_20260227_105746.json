@@ -1,0 +1,83 @@
+{
+  "feature": "66-reviewer-simplify",
+  "reviewer_output": {
+    "score": 45,
+    "approved": false,
+    "issues": [
+      {
+        "section_id": "section_4",
+        "issue_type": "completeness",
+        "severity": "high",
+        "description": "大纲中定义的章节“高可用部署”在文档结构骨架中完全缺失，未覆盖Redis Sentinel/Cluster相关内容。",
+        "suggestion": "补充“高可用部署”章节，详细讲解Sentinel与Cluster架构、配置及适用场景。"
+      },
+      {
+        "section_id": "section_1",
+        "issue_type": "verbatim_violation",
+        "severity": "high",
+        "description": "文档中将Redis官方基准测试数据近似为“每秒10万次操作”，但Verbatim Data要求必须原样保留“110,000 QPS”。",
+        "suggestion": "将“每秒10万次操作”替换为原文数据“110,000 QPS”，并标注来源。"
+      },
+      {
+        "section_id": "section_1",
+        "issue_type": "verbatim_violation",
+        "severity": "high",
+        "description": "未包含强制引用语句“Redis is not just a cache”，该引用来自Antirez Blog，需原样保留。",
+        "suggestion": "在“Redis基础概念”章节中插入引用：“Redis is not just a cache”（Antirez Blog），以强调其多用途特性。"
+      },
+      {
+        "section_id": "global",
+        "issue_type": "learning_objective_gap",
+        "severity": "high",
+        "description": "主要学习目标“掌握Redis高可用部署方案（Sentinel/Cluster）”无对应内容，文档中完全缺失相关章节。",
+        "suggestion": "新增“高可用部署”章节，系统讲解Sentinel故障转移机制与Cluster分片原理，满足核心学习目标。"
+      }
+    ],
+    "summary": "文档结构严重缺失高可用部署章节，且未保留关键数据与引用，导致主要学习目标未覆盖，需重大修订。"
+  },
+  "judge_eval": {
+    "checks": {
+      "R1_outline_coverage": {
+        "result": "pass",
+        "reason": "检出遗漏章节"
+      },
+      "R2_logic_coherence": {
+        "result": "fail",
+        "reason": "未提过渡问题"
+      },
+      "R3_verbatim_violation": {
+        "result": "pass",
+        "reason": "检出数据违规"
+      },
+      "R4_learning_objective": {
+        "result": "pass",
+        "reason": "检出目标缺失"
+      },
+      "R5_approval_correct": {
+        "result": "pass",
+        "reason": "批准判定正确"
+      },
+      "R6_simplified_types": {
+        "result": "pass",
+        "reason": "类型符合规范"
+      },
+      "R7_no_false_positives": {
+        "result": "pass",
+        "reason": "无 high completeness 假阳性，4 章均被识别"
+      },
+      "R8_skeleton_prompt": {
+        "result": "pass",
+        "reason": "骨架包含全部标题，skeleton=712字<原文10120字的 10%"
+      }
+    },
+    "pass_count": 5,
+    "total": 6,
+    "verdict": "FAIL",
+    "summary": "未检查逻辑连贯性"
+  },
+  "pass_count": 7,
+  "total": 8,
+  "verdict": "PASS",
+  "elapsed": 13.655402183532715,
+  "timestamp": "2026-02-27T10:57:46.415829"
+}

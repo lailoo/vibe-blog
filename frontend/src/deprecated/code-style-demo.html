@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码风格博客卡片 - vibe-blog</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/code-style-cards.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            min-height: 100vh;
+            color: #1e293b;
+        }
+        
+        body.dark-mode {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #f1f5f9;
+        }
+        
+        /* 导航栏 */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 40px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        body.dark-mode .navbar {
+            background: rgba(15, 23, 42, 0.9);
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .logo {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+        }
+        
+        .nav-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .theme-toggle {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            border: 1px solid var(--code-border);
+            background: var(--code-surface);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .theme-toggle:hover {
+            background: var(--code-surface-hover);
+        }
+        
+        /* Hero 区域 */
+        .hero {
+            text-align: center;
+            padding: 60px 20px 40px;
+        }
+        
+        .hero h1 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        
+        .hero h1 .cursor {
+            display: inline-block;
+            width: 3px;
+            height: 36px;
+            background: #8b5cf6;
+            margin-left: 4px;
+            animation: blink 1s infinite;
+            vertical-align: middle;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .hero p {
+            font-size: 16px;
+            color: var(--code-text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        /* 返回按钮 */
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--code-surface);
+            border: 1px solid var(--code-border);
+            border-radius: 8px;
+            color: var(--code-text-secondary);
+            text-decoration: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .back-btn:hover {
+            background: var(--code-surface-hover);
+            color: var(--code-text);
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="logo">&lt;vibe-blog /&gt;</div>
+        <div class="nav-actions">
+            <a href="/" class="back-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                返回首页
+            </a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+                🌙
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1>> Browse Blog Posts<span class="cursor"></span></h1>
+        <p>$ find ./blogs -type f -name "*.md" | wc -l</p>
+    </section>
+
+    <!-- 博客卡片容器 -->
+    <div class="code-cards-container">
+        <!-- 终端风格头部 -->
+        <div class="code-cards-header">
+            <div class="code-cards-header-left">
+                <div class="terminal-dots">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                </div>
+                <span class="terminal-title">blogs --list</span>
+            </div>
+            <span class="terminal-status">ready</span>
+        </div>
+
+        <!-- 搜索栏 -->
+        <div class="code-search-bar">
+            <div class="terminal-dots">
+                <span class="terminal-dot red"></span>
+                <span class="terminal-dot yellow"></span>
+                <span class="terminal-dot green"></span>
+            </div>
+            <span class="search-label">search --ai</span>
+            <div class="search-input-wrapper">
+                <span class="search-prompt">$ find</span>
+                <input type="text" placeholder="Search blogs with AI: try 'LangGraph 教程', 'Redis 优化'...">
+            </div>
+            <div class="search-hint">
+                Type to filter, or press <kbd>@</kbd> for AI search
+            </div>
+            <button class="execute-btn">execute</button>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="code-cards-stats" style="display: flex; align-items: center; justify-content: space-between;">
+            <span>$ count: <span class="count">42</span> <span class="label">blogs available</span>
+                &nbsp;&nbsp;--sort 
+                <span class="code-sort-buttons" style="display: inline-flex;">
+                    <button class="code-sort-btn active">⭐ stars</button>
+                    <button class="code-sort-btn">🕐 recent</button>
+                </span>
+            </span>
+            
+            <!-- 封面图显示开关 - 右上角 -->
+            <div class="code-preview-toggle active" id="coverToggle" onclick="toggleCovers()">
+                <span class="code-preview-toggle-label">
+                    <span>🖼️</span>
+                    <span>封面预览</span>
+                </span>
+                <div class="code-preview-toggle-switch"></div>
+            </div>
+        </div>
+
+        <!-- 博客卡片网格 -->
+        <div class="code-cards-grid">
+            
+            <!-- 卡片 1: AI 主题 - 带封面图 -->
+            <article class="code-blog-card with-cover" data-theme="ai">
+                <!-- 封面图区域 -->
+                <div class="code-card-cover">
+                    <img src="https://images.unsplash.com/photo-1677442136019-21780ecad995?w=400&h=200&fit=crop" alt="LangGraph 入门教程">
+                    <div class="code-card-cover-overlay"></div>
+                    <!-- 左上角文件夹标签 -->
+                    <div class="code-card-cover-folder">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span>ai-tutorials</span>
+                    </div>
+                    <!-- 右下角元信息 -->
+                    <div class="code-card-cover-meta">
+                        <span>📖 8 min</span>
+                        <span>👁 2.4k</span>
+                    </div>
+                </div>
+                <div class="code-card-header">
+                    <div class="code-card-folder">
+                        <svg class="code-card-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span class="code-card-folder-name">ai-tutorials</span>
+                    </div>
+                    <div class="code-card-status">
+                        <span class="code-card-status-dot"></span>
+                        <span class="code-card-status-text">module</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-body">
+                    <div class="code-line">
+                        <span class="code-line-number">1</span>
+                        <div class="code-line-content">
+                            <span class="code-keyword">export</span>
+                            <span class="code-blog-title">LangGraph 入门教程</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">2</span>
+                        <div class="code-line-content">
+                            <span class="code-variable">@</span>
+                            <span class="code-keyword">from</span>
+                            <span class="code-string">"langchain/langgraph"</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">3</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 从零开始构建 Multi-Agent 系统</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">4</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 包含完整代码示例和架构图</span>
+                        </div>
+                    </div>
+                    <div class="code-command-line">
+                        <span class="code-prompt">$$</span>
+                        <span class="code-command">cd ai-tutorials && cat README.md</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-footer">
+                    <div class="code-card-tags">
+                        <span class="code-tag tag-ai">AI</span>
+                        <span class="code-tag tag-tutorial">教程</span>
+                        <span class="code-tag">LangGraph</span>
+                    </div>
+                    <span class="code-card-date">2024-01-15</span>
+                </div>
+                
+                <div class="code-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </article>
+
+            <!-- 卡片 2: Web 主题 - 带封面图 -->
+            <article class="code-blog-card with-cover" data-theme="web">
+                <!-- 封面图区域 -->
+                <div class="code-card-cover">
+                    <img src="https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=400&h=200&fit=crop" alt="React 19 新特性">
+                    <div class="code-card-cover-overlay"></div>
+                    <div class="code-card-cover-folder">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span>web-development</span>
+                    </div>
+                    <div class="code-card-cover-meta">
+                        <span>📖 12 min</span>
+                        <span>👁 5.1k</span>
+                    </div>
+                </div>
+                <div class="code-card-header">
+                    <div class="code-card-folder">
+                        <svg class="code-card-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span class="code-card-folder-name">web-development</span>
+                    </div>
+                    <div class="code-card-status">
+                        <span class="code-card-status-dot"></span>
+                        <span class="code-card-status-text">module</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-body">
+                    <div class="code-line">
+                        <span class="code-line-number">1</span>
+                        <div class="code-line-content">
+                            <span class="code-keyword">export</span>
+                            <span class="code-blog-title">React 19 新特性详解</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">2</span>
+                        <div class="code-line-content">
+                            <span class="code-variable">@</span>
+                            <span class="code-keyword">from</span>
+                            <span class="code-string">"react/next"</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">3</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// Server Components, Actions, use() hook</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">4</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 性能优化和最佳实践</span>
+                        </div>
+                    </div>
+                    <div class="code-command-line">
+                        <span class="code-prompt">$$</span>
+                        <span class="code-command">cd web-development && npm start</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-footer">
+                    <div class="code-card-tags">
+                        <span class="code-tag tag-web">Web</span>
+                        <span class="code-tag">React</span>
+                        <span class="code-tag">前端</span>
+                    </div>
+                    <span class="code-card-date">2024-01-12</span>
+                </div>
+                
+                <div class="code-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </article>
+
+            <!-- 卡片 3: Data 主题 - 带封面图 -->
+            <article class="code-blog-card with-cover" data-theme="data">
+                <!-- 封面图区域 -->
+                <div class="code-card-cover">
+                    <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400&h=200&fit=crop" alt="Redis 性能优化">
+                    <div class="code-card-cover-overlay"></div>
+                    <div class="code-card-cover-folder">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span>database</span>
+                    </div>
+                    <div class="code-card-cover-meta">
+                        <span>📖 15 min</span>
+                        <span>👁 3.8k</span>
+                    </div>
+                </div>
+                <div class="code-card-header">
+                    <div class="code-card-folder">
+                        <svg class="code-card-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span class="code-card-folder-name">database</span>
+                    </div>
+                    <div class="code-card-status">
+                        <span class="code-card-status-dot"></span>
+                        <span class="code-card-status-text">module</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-body">
+                    <div class="code-line">
+                        <span class="code-line-number">1</span>
+                        <div class="code-line-content">
+                            <span class="code-keyword">export</span>
+                            <span class="code-blog-title">Redis 性能优化实战</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">2</span>
+                        <div class="code-line-content">
+                            <span class="code-variable">@</span>
+                            <span class="code-keyword">from</span>
+                            <span class="code-string">"redis/optimization"</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">3</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 缓存策略、内存优化、集群部署</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">4</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 百万级 QPS 实战经验</span>
+                        </div>
+                    </div>
+                    <div class="code-command-line">
+                        <span class="code-prompt">$$</span>
+                        <span class="code-command">redis-cli INFO stats</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-footer">
+                    <div class="code-card-tags">
+                        <span class="code-tag tag-data">Data</span>
+                        <span class="code-tag">Redis</span>
+                        <span class="code-tag">性能</span>
+                    </div>
+                    <span class="code-card-date">2024-01-10</span>
+                </div>
+                
+                <div class="code-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </article>
+
+            <!-- 卡片 4: DevOps 主题 - 带封面图 -->
+            <article class="code-blog-card with-cover" data-theme="devops">
+                <!-- 封面图区域 -->
+                <div class="code-card-cover">
+                    <img src="https://images.unsplash.com/photo-1667372393119-3d4c48d07fc9?w=400&h=200&fit=crop" alt="Kubernetes 生产实践">
+                    <div class="code-card-cover-overlay"></div>
+                    <div class="code-card-cover-folder">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span>devops</span>
+                    </div>
+                    <div class="code-card-cover-meta">
+                        <span>📖 20 min</span>
+                        <span>👁 4.2k</span>
+                    </div>
+                </div>
+                <div class="code-card-header">
+                    <div class="code-card-folder">
+                        <svg class="code-card-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span class="code-card-folder-name">devops</span>
+                    </div>
+                    <div class="code-card-status">
+                        <span class="code-card-status-dot"></span>
+                        <span class="code-card-status-text">module</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-body">
+                    <div class="code-line">
+                        <span class="code-line-number">1</span>
+                        <div class="code-line-content">
+                            <span class="code-keyword">export</span>
+                            <span class="code-blog-title">Kubernetes 生产实践</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">2</span>
+                        <div class="code-line-content">
+                            <span class="code-variable">@</span>
+                            <span class="code-keyword">from</span>
+                            <span class="code-string">"k8s/production"</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">3</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 从开发到生产的完整流程</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">4</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 监控、日志、告警一体化</span>
+                        </div>
+                    </div>
+                    <div class="code-command-line">
+                        <span class="code-prompt">$$</span>
+                        <span class="code-command">kubectl get pods -A</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-footer">
+                    <div class="code-card-tags">
+                        <span class="code-tag tag-devops">DevOps</span>
+                        <span class="code-tag">K8s</span>
+                        <span class="code-tag">运维</span>
+                    </div>
+                    <span class="code-card-date">2024-01-08</span>
+                </div>
+                
+                <div class="code-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </article>
+
+            <!-- 卡片 5: Security 主题 - 带封面图 -->
+            <article class="code-blog-card with-cover" data-theme="security">
+                <!-- 封面图区域 -->
+                <div class="code-card-cover">
+                    <img src="https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?w=400&h=200&fit=crop" alt="OAuth 2.0 安全实践">
+                    <div class="code-card-cover-overlay"></div>
+                    <div class="code-card-cover-folder">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span>security</span>
+                    </div>
+                    <div class="code-card-cover-meta">
+                        <span>📖 10 min</span>
+                        <span>👁 1.9k</span>
+                    </div>
+                </div>
+                <div class="code-card-header">
+                    <div class="code-card-folder">
+                        <svg class="code-card-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span class="code-card-folder-name">security</span>
+                    </div>
+                    <div class="code-card-status">
+                        <span class="code-card-status-dot"></span>
+                        <span class="code-card-status-text">module</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-body">
+                    <div class="code-line">
+                        <span class="code-line-number">1</span>
+                        <div class="code-line-content">
+                            <span class="code-keyword">export</span>
+                            <span class="code-blog-title">OAuth 2.0 安全实践</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">2</span>
+                        <div class="code-line-content">
+                            <span class="code-variable">@</span>
+                            <span class="code-keyword">from</span>
+                            <span class="code-string">"auth/oauth2"</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">3</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 授权码流程、PKCE、Token 安全</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">4</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 常见漏洞和防护措施</span>
+                        </div>
+                    </div>
+                    <div class="code-command-line">
+                        <span class="code-prompt">$$</span>
+                        <span class="code-command">openssl verify -CAfile ca.pem</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-footer">
+                    <div class="code-card-tags">
+                        <span class="code-tag tag-security">Security</span>
+                        <span class="code-tag">OAuth</span>
+                        <span class="code-tag">认证</span>
+                    </div>
+                    <span class="code-card-date">2024-01-05</span>
+                </div>
+                
+                <div class="code-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </article>
+
+            <!-- 卡片 6: Tutorial 主题 - 带封面图 -->
+            <article class="code-blog-card with-cover" data-theme="tutorial">
+                <!-- 封面图区域 -->
+                <div class="code-card-cover">
+                    <img src="https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=400&h=200&fit=crop" alt="Python 异步编程">
+                    <div class="code-card-cover-overlay"></div>
+                    <div class="code-card-cover-folder">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span>tutorials</span>
+                    </div>
+                    <div class="code-card-cover-meta">
+                        <span>📖 18 min</span>
+                        <span>👁 6.7k</span>
+                    </div>
+                </div>
+                <div class="code-card-header">
+                    <div class="code-card-folder">
+                        <svg class="code-card-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span class="code-card-folder-name">tutorials</span>
+                    </div>
+                    <div class="code-card-status">
+                        <span class="code-card-status-dot"></span>
+                        <span class="code-card-status-text">module</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-body">
+                    <div class="code-line">
+                        <span class="code-line-number">1</span>
+                        <div class="code-line-content">
+                            <span class="code-keyword">export</span>
+                            <span class="code-blog-title">Python 异步编程指南</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">2</span>
+                        <div class="code-line-content">
+                            <span class="code-variable">@</span>
+                            <span class="code-keyword">from</span>
+                            <span class="code-string">"python/asyncio"</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">3</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// async/await, 协程, 事件循环</span>
+                        </div>
+                    </div>
+                    <div class="code-line">
+                        <span class="code-line-number">4</span>
+                        <div class="code-line-content">
+                            <span class="code-comment">// 高并发场景实战案例</span>
+                        </div>
+                    </div>
+                    <div class="code-command-line">
+                        <span class="code-prompt">$$</span>
+                        <span class="code-command">python -m asyncio</span>
+                    </div>
+                </div>
+                
+                <div class="code-card-footer">
+                    <div class="code-card-tags">
+                        <span class="code-tag tag-tutorial">教程</span>
+                        <span class="code-tag">Python</span>
+                        <span class="code-tag">异步</span>
+                    </div>
+                    <span class="code-card-date">2024-01-03</span>
+                </div>
+                
+                <div class="code-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </article>
+
+        </div>
+    </div>
+
+    <script>
+        // 主题切换
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const btn = document.querySelector('.theme-toggle');
+            btn.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+            localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+        }
+        
+        // 恢复主题
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('dark-mode');
+            document.querySelector('.theme-toggle').textContent = '☀️';
+        }
+        
+        // 排序按钮切换
+        document.querySelectorAll('.code-sort-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.code-sort-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+        
+        // 卡片点击效果
+        document.querySelectorAll('.code-blog-card').forEach(card => {
+            card.addEventListener('click', function() {
+                console.log('Navigate to blog:', this.querySelector('.code-blog-title').textContent);
+            });
+        });
+        
+        // 封面图显示开关
+        function toggleCovers() {
+            const toggle = document.getElementById('coverToggle');
+            const container = document.querySelector('.code-cards-container');
+            
+            toggle.classList.toggle('active');
+            container.classList.toggle('hide-covers');
+            
+            // 保存状态到 localStorage
+            const isActive = toggle.classList.contains('active');
+            localStorage.setItem('showCovers', isActive ? 'true' : 'false');
+        }
+        
+        // 恢复封面图显示状态
+        if (localStorage.getItem('showCovers') === 'false') {
+            const toggle = document.getElementById('coverToggle');
+            const container = document.querySelector('.code-cards-container');
+            toggle.classList.remove('active');
+            container.classList.add('hide-covers');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+{
+  "feature": "67-summary-generator",
+  "agent_output": {
+    "tldr": "这篇实战指南详细讲解了 Docker 容器化部署，从基础概念到生产环境最佳实践。你将学会编写高效 Dockerfile、使用 Docker Compose 编排多服务应用，并掌握生产环境的安全与运维技巧。适合想提升容器化技能的开发者和运维工程师。",
+    "seo_keywords": [
+      "Docker",
+      "容器化",
+      "Dockerfile",
+      "Docker Compose",
+      "多阶段构建",
+      "生产环境部署",
+      "容器编排",
+      "Docker 最佳实践",
+      "Go 应用容器化",
+      "Postgres Docker",
+      "健康检查配置",
+      "Docker 安全加固",
+      "容器日志管理",
+      "Docker 资源限制",
+      "容器化部署实战"
+    ],
+    "social_summary": "想掌握 Docker 容器化部署？这篇实战文章从基础到生产环境全面解析，包含 Dockerfile 最佳实践、Docker Compose 编排技巧，以及生产环境的安全与运维要点，助你高效交付应用！#Docker #容器化 #DevOps",
+    "meta_description": "本文深入讲解 Docker 容器化部署实战，涵盖 Dockerfile 最佳实践、Docker Compose 编排、生产环境部署技巧等内容，帮助开发者和运维工程师掌握从入门到生产环境的完整技能。"
+  },
+  "judge_eval": {
+    "checks": {
+      "S1_tldr_quality": {
+        "result": "pass",
+        "reason": "内容完整，语气吸引"
+      },
+      "S2_seo_count": {
+        "result": "pass",
+        "reason": "关键词数量15，符合要求"
+      },
+      "S3_seo_quality": {
+        "result": "pass",
+        "reason": "包含核心技术术语"
+      },
+      "S4_social_summary": {
+        "result": "pass",
+        "reason": "长度合适，有吸引力"
+      },
+      "S5_meta_description": {
+        "result": "pass",
+        "reason": "长度合适，关键词齐全"
+      },
+      "S6_json_complete": {
+        "result": "pass",
+        "reason": "四个字段均存在非空"
+      }
+    },
+    "pass_count": 6,
+    "total": 6,
+    "verdict": "PASS",
+    "summary": "Agent 输出完全符合摘要生成任务要求。"
+  },
+  "pass_count": 6,
+  "total": 6,
+  "verdict": "PASS",
+  "elapsed": 22.28512406349182,
+  "timestamp": "2026-02-11T03:09:27.724354"
+}

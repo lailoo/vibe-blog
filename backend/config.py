@@ -73,6 +73,84 @@ class Config:
     # Veo3 视频生成配置
     VEO3_MODEL = os.getenv('VEO3_MODEL', 'veo3.1-fast')
     VIDEO_OUTPUT_FOLDER = os.getenv('VIDEO_OUTPUT_FOLDER', '')
+    
+    # 小红书 Tab 配置
+    XHS_TAB_ENABLED = os.getenv('XHS_TAB_ENABLED', 'false').lower() == 'true'
+
+    # LLM 弹性调用配置（37.32 截断扩容与智能重试）
+    LLM_CALL_TIMEOUT = int(os.getenv('LLM_CALL_TIMEOUT', '600'))
+    LLM_MAX_RETRIES = int(os.getenv('LLM_MAX_RETRIES', '5'))
+    LLM_RETRY_BASE_WAIT = float(os.getenv('LLM_RETRY_BASE_WAIT', '5'))
+    LLM_RETRY_MAX_WAIT = float(os.getenv('LLM_RETRY_MAX_WAIT', '60'))
+    LLM_TRUNCATION_EXPAND_RATIO = float(os.getenv('LLM_TRUNCATION_EXPAND_RATIO', '1.1'))
+
+    # 上下文长度守卫配置（37.33 上下文动态估算与自动回退）
+    CONTEXT_GUARD_ENABLED = os.getenv('CONTEXT_GUARD_ENABLED', 'true').lower() == 'true'
+    CONTEXT_SAFETY_MARGIN = float(os.getenv('CONTEXT_SAFETY_MARGIN', '0.85'))
+    CONTEXT_ESTIMATION_METHOD = os.getenv('CONTEXT_ESTIMATION_METHOD', 'auto')
+
+    # Token 追踪与成本分析
+    TOKEN_TRACKING_ENABLED = os.getenv('TOKEN_TRACKING_ENABLED', 'true').lower() == 'true'
+    TOKEN_COST_ESTIMATION = os.getenv('TOKEN_COST_ESTIMATION', 'false').lower() == 'true'
+    # 102.10 迁移：主动式 Token 预算管理
+    TOKEN_TOTAL_BUDGET = int(os.getenv('TOKEN_TOTAL_BUDGET', '500000'))
+
+    # 结构化任务日志
+    BLOG_TASK_LOG_ENABLED = os.getenv('BLOG_TASK_LOG_ENABLED', 'true').lower() == 'true'
+    BLOG_LOGS_DIR = os.getenv('BLOG_LOGS_DIR', 'logs/blog_tasks')
+
+    # SSE 流式事件增量优化（37.34）
+    SSE_LLM_EVENTS_ENABLED = os.getenv('SSE_LLM_EVENTS_ENABLED', 'true').lower() == 'true'
+    SSE_TOKEN_SUMMARY_ENABLED = os.getenv('SSE_TOKEN_SUMMARY_ENABLED', 'true').lower() == 'true'
+
+    # 统一 ToolManager（37.09）
+    TOOL_BLACKLIST = os.getenv('TOOL_BLACKLIST', '')
+    TOOL_DEFAULT_TIMEOUT = int(os.getenv('TOOL_DEFAULT_TIMEOUT', '300'))
+
+    # Serper Google 搜索配置（75.02）
+    SERPER_API_KEY = os.getenv('SERPER_API_KEY', '')
+    SERPER_TIMEOUT = int(os.getenv('SERPER_TIMEOUT', '10'))
+    SERPER_MAX_RESULTS = int(os.getenv('SERPER_MAX_RESULTS', '10'))
+
+    # 搜狗搜索配置（75.07 腾讯云 SearchPro）
+    TENCENTCLOUD_SECRET_ID = os.getenv('TENCENTCLOUD_SECRET_ID', '')
+    TENCENTCLOUD_SECRET_KEY = os.getenv('TENCENTCLOUD_SECRET_KEY', '')
+    SOGOU_SEARCH_TIMEOUT = int(os.getenv('SOGOU_SEARCH_TIMEOUT', '10'))
+    SOGOU_MAX_RESULTS = int(os.getenv('SOGOU_MAX_RESULTS', '10'))
+
+    # 多提供商 LLM 客户端工厂（37.29）
+    DEFAULT_LLM_PROVIDER = os.getenv('DEFAULT_LLM_PROVIDER', 'openai')
+    DEFAULT_LLM_MODEL = os.getenv('DEFAULT_LLM_MODEL', '')
+
+    # 上下文压缩策略（37.06）
+    CONTEXT_COMPRESSION_ENABLED = os.getenv('CONTEXT_COMPRESSION_ENABLED', 'true').lower() == 'true'
+    CONTEXT_SEARCH_MAX_RESULTS = int(os.getenv('CONTEXT_SEARCH_MAX_RESULTS', '10'))
+    CONTEXT_REVISION_KEEP_LAST = int(os.getenv('CONTEXT_REVISION_KEEP_LAST', '2'))
+
+    # 推理引擎 Extended Thinking（37.03）
+    THINKING_ENABLED = os.getenv('THINKING_ENABLED', 'false').lower() == 'true'
+    THINKING_BUDGET_TOKENS = int(os.getenv('THINKING_BUDGET_TOKENS', '19000'))
+
+    # 三级 LLM 模型策略（41.06 迁移）— 留空则退化为 TEXT_MODEL
+    LLM_FAST = os.getenv('LLM_FAST', '')
+    LLM_SMART = os.getenv('LLM_SMART', '')
+    LLM_STRATEGIC = os.getenv('LLM_STRATEGIC', '')
+    LLM_FAST_MAX_TOKENS = int(os.getenv('LLM_FAST_MAX_TOKENS', '3000'))
+    LLM_SMART_MAX_TOKENS = int(os.getenv('LLM_SMART_MAX_TOKENS', '8192'))
+    LLM_STRATEGIC_MAX_TOKENS = int(os.getenv('LLM_STRATEGIC_MAX_TOKENS', '16000'))
+
+    # Jina 深度抓取（75.03）
+    JINA_API_KEY = os.getenv('JINA_API_KEY', '')
+    DEEP_SCRAPE_ENABLED = os.getenv('DEEP_SCRAPE_ENABLED', 'true').lower() == 'true'
+    DEEP_SCRAPE_TOP_N = int(os.getenv('DEEP_SCRAPE_TOP_N', '3'))
+    DEEP_SCRAPE_TIMEOUT = int(os.getenv('DEEP_SCRAPE_TIMEOUT', '30'))
+
+    # 知识空白检测与多轮搜索（75.04）
+    MULTI_ROUND_SEARCH_ENABLED = os.getenv('MULTI_ROUND_SEARCH_ENABLED', 'true').lower() == 'true'
+
+    # Crawl4AI 主动爬取（75.06）
+    CRAWL4AI_ENABLED = os.getenv('CRAWL4AI_ENABLED', 'false').lower() == 'true'
+    MATERIALS_DIR = os.getenv('MATERIALS_DIR', os.path.join(BASE_DIR, 'materials'))
 
 
 class DevelopmentConfig(Config):
@@ -103,11 +181,11 @@ def get_config():
 # 文章长度预设配置
 ARTICLE_LENGTH_PRESETS = {
     'mini': {
-        'sections_count': 1,
-        'images_count': 1,
+        'sections_count': 4,        # 2-4 个知识点章节
+        'images_count': 5,          # 每章节 1 张配图 + 1 张封面图
         'code_blocks_count': 0,
-        'target_word_count': 300,
-        'description': '快速测试版（1个章节）'
+        'target_word_count': 800,
+        'description': '精品短文（2-4个知识点章节）'
     },
     'short': {
         'sections_count': 2,

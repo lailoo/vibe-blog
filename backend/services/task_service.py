@@ -54,16 +54,24 @@ class TaskManager:
         self.task_lock = Lock()
         logger.info("TaskManager 初始化完成")
     
-    def create_task(self) -> str:
-        """创建新任务"""
-        task_id = f"task_{uuid.uuid4().hex[:12]}"
+    def create_task(self, task_id: str = None, task_type: str = None) -> str:
+        """创建新任务
+        
+        Args:
+            task_id: 可选，自定义任务 ID，不传则自动生成
+            task_type: 可选，任务类型标识
+        """
+        if not task_id:
+            from datetime import datetime
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            task_id = f"task_{ts}_{uuid.uuid4().hex[:8]}"
         with self.task_lock:
             self.tasks[task_id] = TaskProgress(
                 task_id=task_id,
                 status="pending"
             )
             self.queues[task_id] = Queue()
-        logger.info(f"创建任务: {task_id}")
+        logger.info(f"创建任务: {task_id}" + (f" (类型: {task_type})" if task_type else ""))
         return task_id
     
     def get_task(self, task_id: str) -> Optional[TaskProgress]:
@@ -75,13 +83,23 @@ class TaskManager:
         return self.queues.get(task_id)
     
     def send_event(self, task_id: str, event: str, data: Dict[str, Any]):
-        """发送 SSE 事件"""
+        """发送 SSE 事件（带唯一 ID 和时间戳）"""
         queue = self.queues.get(task_id)
         if queue:
-            queue.put({'event': event, 'data': data})
-            logger.debug(f"SSE 事件已入队 [{task_id}]: {event}")
+            queue.put({
+                'event': event,
+                'id': uuid.uuid4().hex[:12],
+                'timestamp': time.time(),
+                'data': data,
+            })
+            if event not in ('writing_chunk', 'log', 'stream'):
+                logger.debug(f"SSE 事件已入队 [{task_id}]: {event}")
         else:
-            logger.warning(f"SSE 队列不存在 [{task_id}]: {event}")
+            # 队列不存在时只记录一次 warning，避免日志洪泛
+            warn_key = f"_sse_warn_{task_id}"
+            if not getattr(self, warn_key, False):
+                setattr(self, warn_key, True)
+                logger.warning(f"SSE 队列不存在 [{task_id}]，后续同任务事件将静默丢弃")
     
     def send_progress(self, task_id: str, stage: str, progress: int, message: str, **extra):
         """发送进度更新"""

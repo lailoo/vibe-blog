@@ -4,9 +4,10 @@ Planner Agent - 大纲规划
 
 import json
 import logging
+import re
 from typing import Dict, Any
 
-from ..prompts.prompt_manager import get_prompt_manager
+from ..prompts import get_prompt_manager
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +31,23 @@ class PlannerAgent:
         topic: str,
         article_type: str,
         target_audience: str,
-        target_length: str,
+        audience_adaptation: str = "technical-beginner",
+        target_length: str = "medium",
         background_knowledge: str = "",
         key_concepts: list = None,
         on_stream: callable = None,
         target_sections_count: int = None,
         target_images_count: int = None,
         target_code_blocks_count: int = None,
-        target_word_count: int = None
+        target_word_count: int = None,
+        instructional_analysis: dict = None,
+        verbatim_data: list = None,
+        distilled_sources: list = None,
+        content_gaps: list = None,
+        writing_recommendations: dict = None,
+        material_by_type: dict = None,
+        common_themes: list = None,
+        contradictions: list = None
     ) -> Dict[str, Any]:
         """
         生成文章大纲
@@ -46,6 +56,7 @@ class PlannerAgent:
             topic: 技术主题
             article_type: 文章类型
             target_audience: 目标受众
+            audience_adaptation: 受众适配类型
             target_length: 目标长度 (mini/short/medium/long/custom)
             background_knowledge: 背景知识
             key_concepts: 核心概念列表
@@ -54,24 +65,36 @@ class PlannerAgent:
             target_images_count: 目标配图数
             target_code_blocks_count: 目标代码块数
             target_word_count: 目标字数
+            instructional_analysis: 教学设计分析（新增）
+            verbatim_data: 需要原样保留的数据（新增）
             
         Returns:
             大纲字典
         """
         key_concepts = key_concepts or []
+        verbatim_data = verbatim_data or []
         
         pm = get_prompt_manager()
         prompt = pm.render_planner(
             topic=topic,
             article_type=article_type,
             target_audience=target_audience,
+            audience_adaptation=audience_adaptation,
             target_length=target_length,
             background_knowledge=background_knowledge,
             key_concepts=key_concepts,
             target_sections_count=target_sections_count,
             target_images_count=target_images_count,
             target_code_blocks_count=target_code_blocks_count,
-            target_word_count=target_word_count
+            target_word_count=target_word_count,
+            instructional_analysis=instructional_analysis,
+            verbatim_data=verbatim_data,
+            distilled_sources=distilled_sources or [],
+            content_gaps=content_gaps or [],
+            writing_recommendations=writing_recommendations or {},
+            material_by_type=material_by_type or {},
+            common_themes=common_themes or [],
+            contradictions=contradictions or []
         )
         
         try:
@@ -87,7 +110,8 @@ class PlannerAgent:
                 
                 response = self.llm.chat_stream(
                     messages=[{"role": "user", "content": prompt}],
-                    on_chunk=on_chunk
+                    on_chunk=on_chunk,
+                    response_format={"type": "json_object"}
                 )
             else:
                 logger.info("使用普通生成大纲")
@@ -96,18 +120,47 @@ class PlannerAgent:
                     response_format={"type": "json_object"}
                 )
             
-            # 解析 JSON（可能包含 markdown 代码块）
+            # 解析 JSON（可能包含 markdown 代码块或思考文本）
+            if not response:
+                raise ValueError("LLM 返回空响应")
             response_text = response.strip()
             if '```json' in response_text:
                 start = response_text.find('```json') + 7
                 end = response_text.find('```', start)
-                response_text = response_text[start:end].strip()
+                if end != -1:
+                    response_text = response_text[start:end].strip()
+                else:
+                    # 流式模式下可能缺少结尾 ```
+                    response_text = response_text[start:].strip()
             elif '```' in response_text:
                 start = response_text.find('```') + 3
                 end = response_text.find('```', start)
-                response_text = response_text[start:end].strip()
-            
-            outline = json.loads(response_text)
+                if end != -1:
+                    response_text = response_text[start:end].strip()
+                else:
+                    response_text = response_text[start:].strip()
+
+            # 如果响应包含思考文本（非 JSON），提取第一个 JSON 对象
+            if response_text and not response_text.startswith('{'):
+                json_start = response_text.find('{')
+                if json_start > 0:
+                    logger.info(f"[Planner] 跳过 {json_start} 字符的思考文本，提取 JSON")
+                    response_text = response_text[json_start:]
+
+            # 尝试修复截断的 JSON（流式模式常见问题）
+            try:
+                outline = json.loads(response_text)
+            except json.JSONDecodeError:
+                # 尝试 strict=False
+                try:
+                    outline = json.loads(response_text, strict=False)
+                except json.JSONDecodeError as e:
+                    # 尝试补全截断的 JSON
+                    repaired = self._repair_truncated_json(response_text)
+                    if repaired:
+                        outline = json.loads(repaired)
+                    else:
+                        raise e
             
             # 验证必要字段
             required_fields = ['title', 'sections']
@@ -115,11 +168,22 @@ class PlannerAgent:
                 if field not in outline:
                     raise ValueError(f"大纲缺少必要字段: {field}")
             
-            # 为每个章节添加 ID (如果没有)
+            # 为每个章节添加 ID (如果没有) 和新字段默认值
             for i, section in enumerate(outline.get('sections', [])):
                 if 'id' not in section:
                     section['id'] = f"section_{i + 1}"
-            
+                section.setdefault('core_question', '')
+                section.setdefault('assigned_materials', [])
+                section.setdefault('subsections', [])
+
+            # 打印素材分配情况
+            for section in outline.get('sections', []):
+                materials = section.get('assigned_materials', [])
+                if materials:
+                    logger.info(f"📎 素材分配: [{section.get('title', '')}] ← {len(materials)} 条素材")
+                    for m in materials:
+                        logger.debug(f"   - source_index={m.get('source_index')}, {m.get('instruction', '')[:60]}")
+
             return outline
             
         except json.JSONDecodeError as e:
@@ -129,6 +193,73 @@ class PlannerAgent:
             logger.error(f"大纲生成失败: {e}")
             raise
     
+    @staticmethod
+    def _repair_truncated_json(text: str) -> str:
+        """尝试修复截断的 JSON（补全缺失的括号和引号）
+
+        策略：逐步从末尾回退，每次删除最后一个不完整的元素，
+        然后补全所有未闭合的括号。最多尝试 20 次。
+        """
+        open_braces = text.count('{') - text.count('}')
+        open_brackets = text.count('[') - text.count(']')
+
+        if open_braces <= 0 and open_brackets <= 0:
+            return ""
+
+        repaired = text.rstrip()
+
+        for attempt in range(20):
+            candidate = repaired.rstrip().rstrip(',')
+
+            # 检查是否在字符串中间（未闭合的引号）
+            in_string = False
+            escaped = False
+            for ch in candidate:
+                if escaped:
+                    escaped = False
+                    continue
+                if ch == '\\':
+                    escaped = True
+                    continue
+                if ch == '"':
+                    in_string = not in_string
+
+            if in_string:
+                candidate += '"'
+
+            # 检查末尾是否是不完整的 key-value（如 "key": 没有值）
+            stripped = candidate.rstrip()
+            if stripped.endswith(':'):
+                candidate = stripped + ' ""'
+            elif re.search(r':\s*$', stripped):
+                candidate = stripped + '""'
+
+            ob = candidate.count('{') - candidate.count('}')
+            ol = candidate.count('[') - candidate.count(']')
+            candidate += ']' * max(0, ol)
+            candidate += '}' * max(0, ob)
+
+            try:
+                json.loads(candidate)
+                logger.warning(f"[Planner] JSON 截断已修复 (attempt {attempt + 1})")
+                return candidate
+            except json.JSONDecodeError:
+                pass
+
+            # 回退策略：删除最后一个不完整的元素
+            last_comma = repaired.rfind(',')
+            last_open_brace = repaired.rfind('{')
+            last_open_bracket = repaired.rfind('[')
+            cutpoint = max(last_comma, last_open_brace, last_open_bracket)
+            if cutpoint <= 0:
+                return ""
+            if cutpoint == last_comma:
+                repaired = repaired[:cutpoint]
+            else:
+                repaired = repaired[:cutpoint + 1]
+
+        return ""
+
     def run(self, state: Dict[str, Any], on_stream: callable = None) -> Dict[str, Any]:
         """
         执行大纲规划
@@ -147,6 +278,7 @@ class PlannerAgent:
                 topic=state.get('topic', ''),
                 article_type=state.get('article_type', 'tutorial'),
                 target_audience=state.get('target_audience', 'intermediate'),
+                audience_adaptation=state.get('audience_adaptation', 'technical-beginner'),
                 target_length=state.get('target_length', 'medium'),
                 background_knowledge=state.get('background_knowledge', ''),
                 key_concepts=state.get('key_concepts', []),
@@ -154,10 +286,25 @@ class PlannerAgent:
                 target_sections_count=state.get('target_sections_count'),
                 target_images_count=state.get('target_images_count'),
                 target_code_blocks_count=state.get('target_code_blocks_count'),
-                target_word_count=state.get('target_word_count')
+                target_word_count=state.get('target_word_count'),
+                instructional_analysis=state.get('instructional_analysis'),
+                verbatim_data=state.get('verbatim_data', []),
+                distilled_sources=state.get('distilled_sources', []),
+                content_gaps=state.get('content_gaps', []),
+                writing_recommendations=state.get('writing_recommendations', {}),
+                material_by_type=state.get('material_by_type', {}),
+                common_themes=state.get('common_themes', []),
+                contradictions=state.get('contradictions', [])
             )
             
             state['outline'] = outline
+            
+            # 提取信息架构（新增）
+            information_architecture = outline.get('information_architecture')
+            if information_architecture:
+                state['information_architecture'] = information_architecture
+                logger.info(f"📐 信息架构: {information_architecture.get('structure_type', 'unknown')}")
+            
             logger.info(f"大纲生成完成: {outline.get('title', '')}, {len(outline.get('sections', []))} 个章节")
             
         except Exception as e:

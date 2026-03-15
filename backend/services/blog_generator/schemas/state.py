@@ -3,6 +3,7 @@
 """
 
 import os
+import uuid
 from typing import TypedDict, List, Optional, Literal
 from pydantic import BaseModel, Field
 
@@ -81,10 +82,48 @@ class QuestionResult(BaseModel):
 class ReviewIssue(BaseModel):
     """审核问题"""
     section_id: str
-    issue_type: Literal["logic", "accuracy", "completeness", "image", "readability"]
+    issue_type: Literal["completeness", "logic", "verbatim_violation", "learning_objective_gap"]
     severity: Literal["high", "medium", "low"]
     description: str
     suggestion: str
+    original_value: Optional[str] = None  # 仅 verbatim_violation 类型需要
+    found_value: Optional[str] = None  # 仅 verbatim_violation 类型需要
+
+
+class LearningObjective(BaseModel):
+    """学习目标"""
+    type: Literal["primary", "secondary", "tertiary"]
+    objective: str
+
+
+class AudienceAnalysis(BaseModel):
+    """受众分析"""
+    knowledge_level: Literal["beginner", "intermediate", "advanced"]
+    reading_purpose: str
+    expected_outcome: str
+
+
+class VerbatimDataItem(BaseModel):
+    """Verbatim 数据项（需要原样保留的数据）"""
+    type: Literal["statistic", "quote", "term"]
+    value: str
+    context: Optional[str] = None
+    source: Optional[str] = None
+    definition: Optional[str] = None  # 仅 term 类型需要
+
+
+class InstructionalAnalysis(BaseModel):
+    """教学设计分析（Researcher 输出）"""
+    learning_objectives: List[LearningObjective] = Field(default_factory=list)
+    audience: Optional[AudienceAnalysis] = None
+    content_type: Literal["tutorial", "concept", "comparison", "problem-solving", "overview"] = "tutorial"
+    verbatim_data: List[VerbatimDataItem] = Field(default_factory=list)
+
+
+class InformationArchitecture(BaseModel):
+    """信息架构（Planner 输出）"""
+    structure_type: Literal["linear-progression", "hierarchical", "comparison", "problem-solving"]
+    learning_objectives_mapping: List[dict] = Field(default_factory=list)  # [{"objective": "...", "supported_by_sections": ["section_1"]}]
 
 
 class SearchResult(BaseModel):
@@ -120,9 +159,11 @@ class SharedState(TypedDict):
     topic: str
     article_type: Literal["problem-solution", "tutorial", "comparison"]
     target_audience: Literal["beginner", "intermediate", "advanced"]
+    audience_adaptation: str  # 受众适配类型: default/high-school/children/professional
     target_length: Literal["mini", "short", "medium", "long", "custom"]
     source_material: Optional[str]
     image_style: str  # 图片风格 ID
+    aspect_ratio: str  # 宽高比: 16:9 或 9:16（前端选择）
     
     # 文档知识 (用户上传的文档)
     document_ids: List[str]  # 用户上传的文档 ID 列表
@@ -135,6 +176,23 @@ class SharedState(TypedDict):
     reference_links: List[str]  # 参考链接 (网络来源)
     document_references: List[dict]  # 文档来源引用
     knowledge_source_stats: dict  # 知识来源统计
+    
+    # Instructional Design 分析 (Researcher 输出)
+    instructional_analysis: Optional[dict]  # 教学设计分析
+    learning_objectives: List[dict]  # 学习目标列表
+    verbatim_data: List[dict]  # 需要原样保留的数据
+
+    # 52号方案: 搜索结果提炼与缺口分析 (Researcher 输出)
+    distilled_sources: List[dict]  # 逐条提炼的结构化素材
+    material_by_type: dict  # 按类型分类的素材
+    common_themes: List[str]  # 多源共同主题
+    contradictions: List[dict]  # 矛盾点
+    content_gaps: List[str]  # 内容缺口
+    unique_angles: List[dict]  # 独特角度
+    writing_recommendations: dict  # 写作建议
+
+    # 信息架构 (Planner 输出)
+    information_architecture: Optional[dict]  # 信息架构设计
     
     # 多轮搜索相关
     search_count: int  # 当前搜索次数
@@ -159,13 +217,34 @@ class SharedState(TypedDict):
     question_results: List[dict]
     all_sections_detailed: bool
     questioning_count: int  # 追问次数，防止无限循环
+
+    # 段落评估结果 (Generator-Critic Loop #69.04)
+    section_evaluations: List[dict]  # 每段的多维度评估结果
+    needs_section_improvement: bool  # 是否有段落需要改进
+    section_improve_count: int  # 段落改进轮数
+    prev_section_avg_score: float  # 上一轮平均分（收敛检测用）
     
     # 审核结果 (Reviewer 输出)
     review_score: int
     review_issues: List[dict]
     review_approved: bool
     revision_count: int  # 修订次数，防止无限循环
-    
+
+    # 一致性检查 (ThreadChecker + VoiceChecker 输出)
+    thread_issues: List[dict]  # 叙事一致性问题
+    voice_issues: List[dict]  # 语气统一问题
+
+    # 事实核查 (FactCheck 输出)
+    factcheck_report: Optional[dict]  # 核查报告 {overall_score, claims, fix_instructions}
+
+    # 导读 + SEO (SummaryGenerator 输出)
+    seo_keywords: List[str]  # SEO 关键词
+    social_summary: Optional[str]  # 社交媒体摘要
+    meta_description: Optional[str]  # Meta Description
+
+    # 配图 (Artist 输出 - 章节级)
+    section_images: List[dict]  # 章节配图映射
+
     # 最终输出 (Assembler 输出)
     final_markdown: Optional[str]
     final_html: Optional[str]
@@ -180,6 +259,19 @@ class SharedState(TypedDict):
     
     # 错误信息
     error: Optional[str]
+
+    # 102.10 迁移特性字段
+    trace_id: Optional[str]  # Feature E: 分布式追踪 ID
+    error_history: List[dict]  # Feature C: 错误追踪历史
+    _node_errors: List[dict]  # Feature C: 当前节点错误（内部）
+    _node_budget: Optional[int]  # Feature H: 节点 Token 预算
+    _budget_warning: bool  # Feature H: 预算警告标志
+    prefetch_docs: List[dict]  # Feature G: 预取的知识库文档
+
+    # 配图异步任务（coder_and_artist → wait_for_images 传递）
+    # Future/Executor 本身存在 BlogGenerator._image_tasks 实例字典中，
+    # state 只存一个普通字符串 key，避免 LangGraph msgpack 序列化失败
+    _image_task_id: Optional[str]  # 用于从 BlogGenerator._image_tasks 取回 Future
 
 
 def get_max_search_count(target_length: str) -> int:
@@ -203,15 +295,29 @@ def get_max_search_count(target_length: str) -> int:
     return max_search_map.get(target_length, max_search_map['medium'])
 
 
+def _resolve_trace_id() -> str:
+    """优先使用 task_id_context，保证 per-task 日志完整"""
+    try:
+        from logging_config import task_id_context
+        ctx_id = task_id_context.get()
+        if ctx_id:
+            return ctx_id
+    except Exception:
+        pass
+    return uuid.uuid4().hex[:8]
+
+
 def create_initial_state(
     topic: str,
     article_type: str = "tutorial",
     target_audience: str = "intermediate",
+    audience_adaptation: str = "default",
     target_length: str = "medium",
     source_material: str = None,
     document_ids: List[str] = None,
     document_knowledge: List[dict] = None,
     image_style: str = "",
+    aspect_ratio: str = "16:9",  # 新增：宽高比参数
     # 新增：文章长度配置参数
     custom_config: dict = None,
     target_sections_count: int = None,
@@ -224,9 +330,11 @@ def create_initial_state(
         topic=topic,
         article_type=article_type,
         target_audience=target_audience,
+        audience_adaptation=audience_adaptation,
         target_length=target_length,
         source_material=source_material,
         image_style=image_style,
+        aspect_ratio=aspect_ratio,  # 新增：宽高比
         # 文档知识
         document_ids=document_ids or [],
         document_knowledge=document_knowledge or [],
@@ -237,6 +345,20 @@ def create_initial_state(
         reference_links=[],
         document_references=[],
         knowledge_source_stats={},
+        # Instructional Design 分析
+        instructional_analysis=None,
+        learning_objectives=[],
+        verbatim_data=[],
+        # 52号方案: 搜索结果提炼与缺口分析
+        distilled_sources=[],
+        material_by_type={},
+        common_themes=[],
+        contradictions=[],
+        content_gaps=[],
+        unique_angles=[],
+        writing_recommendations={},
+        # 信息架构
+        information_architecture=None,
         # 多轮搜索相关
         search_count=0,
         max_search_count=get_max_search_count(target_length),
@@ -251,14 +373,34 @@ def create_initial_state(
         question_results=[],
         all_sections_detailed=False,
         questioning_count=0,
+        section_evaluations=[],
+        needs_section_improvement=False,
+        section_improve_count=0,
+        prev_section_avg_score=0.0,
         review_score=0,
         review_issues=[],
         review_approved=False,
         revision_count=0,
+        thread_issues=[],
+        voice_issues=[],
+        factcheck_report=None,
+        seo_keywords=[],
+        social_summary=None,
+        meta_description=None,
+        section_images=[],
         final_markdown=None,
         final_html=None,
         output_folder=None,
         error=None,
+        # 102.10 迁移特性字段
+        trace_id=_resolve_trace_id(),
+        error_history=[],
+        _node_errors=[],
+        _node_budget=None,
+        _budget_warning=False,
+        prefetch_docs=[],
+        # 配图异步任务
+        _image_task_id=None,
         # 新增：文章长度配置
         custom_config=custom_config,
         target_sections_count=target_sections_count,

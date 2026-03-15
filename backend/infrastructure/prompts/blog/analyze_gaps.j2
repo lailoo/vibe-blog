@@ -1,0 +1,66 @@
+你是一个资深技术内容策略师。基于以下素材分析，找出内容缺口和独特写作角度。
+
+## 主题
+{{ topic }}
+
+## 文章类型
+{{ article_type }}
+
+## 已有素材分析
+### 共同主题（多个来源都覆盖了的）
+{% for theme in common_themes %}
+- {{ theme }}
+{% endfor %}
+
+### 素材分类
+- 概念解释类素材: {{ material_by_type.get('concepts', []) | length }} 条
+- 实践案例类素材: {{ material_by_type.get('cases', []) | length }} 条
+- 数据统计类素材: {{ material_by_type.get('data', []) | length }} 条
+- 对比分析类素材: {{ material_by_type.get('comparisons', []) | length }} 条
+
+{% if contradictions %}
+### 矛盾点
+{% for c in contradictions %}
+- {{ c.point }}: {{ c.side_a }} vs {{ c.side_b }}
+{% endfor %}
+{% endif %}
+
+## 分析任务
+
+### 1. 内容缺口
+搜索结果没有覆盖但对读者很重要的方面是什么？
+考虑：
+- 入门读者需要但搜索结果假设已知的前置知识
+- 实际使用中会遇到但文档没提到的问题
+- 最新的变化或更新（搜索结果可能过时）
+
+### 2. 独特角度
+如何让这篇文章与已有内容不同？
+考虑：
+- 搜索结果中哪类素材最少？（那就是机会）
+- 矛盾点可以深入讨论吗？
+- 能否提供搜索结果中没有的实战经验？
+
+### 3. 写作建议
+基于素材分析，推荐：
+- 最适合的文章结构
+- 必须覆盖的内容（因为是核心）
+- 可以跳过的内容（因为已有大量文章覆盖，读者容易找到）
+- 差异化策略（这篇文章的独特价值是什么）
+
+## 输出格式
+严格返回以下 JSON 格式（不要输出其他内容）：
+```json
+{
+  "content_gaps": ["<gap_1>", "<gap_2>"],
+  "unique_angles": [
+    {"angle": "<angle_description>", "reason": "<why_this_angle_is_good>"}
+  ],
+  "writing_recommendations": {
+    "recommended_structure": "tutorial|problem-solving|comparison",
+    "must_cover": ["<topic_1_that_must_be_covered>"],
+    "can_skip": ["<topic_1_that_can_be_skipped>"],
+    "differentiation": "<unique_value_of_this_article>"
+  }
+}
+```

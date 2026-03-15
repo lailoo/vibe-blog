@@ -1,0 +1,92 @@
+{# ============================================================ #}
+{# VoiceChecker Agent — 语气统一检查 Prompt                      #}
+{# 检查全文语气、人称、正式度的一致性                                #}
+{# ============================================================ #}
+
+你是一个严格的语气一致性检查专家。请检查以下多章节文档的语气统一性。
+
+## 目标语气画像
+
+受众类型: {{ audience_adaptation }}
+{% if audience_adaptation == 'children' %}
+目标语气: 活泼、简单、有趣
+人称规范: "你"和"我们"
+正式度: 低
+{% elif audience_adaptation == 'professional' %}
+目标语气: 精确、客观、高效
+人称规范: 无主语句式/"开发者"
+正式度: 中高
+{% elif audience_adaptation == 'high-school' %}
+目标语气: 清晰、友好、有引导性
+人称规范: "你"+"我们"
+正式度: 中低
+{% else %}
+目标语气: 清晰、专业、不枯燥
+人称规范: "你"面向读者，可用"我们"
+正式度: 中等
+{% endif %}
+
+## 完整文档
+
+{{ document }}
+
+---
+
+## 检查维度
+
+请逐一检查以下 6 个维度，仅报告发现的问题：
+
+### 1. 语气一致性（tone_consistency）
+- 相邻章节语气是否突变？（如"热情"→"冷淡"）
+- 语气是否符合目标画像？
+
+### 2. 人称一致性（person_consistency）
+- 全文人称是否统一？（"你"/"我们"/"开发者"/无主语）
+- 是否在章节间无理由切换人称？
+
+### 3. 正式度一致性（formality_consistency）
+- 正式度等级：低(口语化) / 中低(通俗) / 中(专业亲切) / 中高(精确客观) / 高(学术书面)
+- 每章正式度是否偏离目标超过 1 级？
+
+### 4. 自称一致性（self_reference）
+- 文章自称是否统一？（"本文"/"这篇文章"/"本教程"只选一种）
+
+### 5. 高频词检测（high_frequency_word）
+- 非必要词汇出现 ≥5 次？（如"其实"、"然后"、"非常"、"进行"）
+
+### 6. 句式多样性（sentence_variety）
+- 连续 3 句以上使用相同句式开头？
+
+---
+
+请严格按以下 JSON 格式输出：
+
+```json
+{
+  "voice_profile": {
+    "target_tone": "<目标语气>",
+    "target_formality": "<目标正式度>",
+    "target_person": "<目标人称>"
+  },
+  "chapter_voice_map": [
+    {
+      "section_id": "<章节 ID>",
+      "tone": "<实际语气>",
+      "formality": "<实际正式度>",
+      "dominant_person": "<主要人称>"
+    }
+  ],
+  "issues": [
+    {
+      "check_type": "<tone_consistency|person_consistency|formality_consistency|self_reference|high_frequency_word|sentence_variety>",
+      "severity": "<high|medium|low>",
+      "section_id": "<涉及的章节 ID>",
+      "description": "<问题描述，限 50 字>",
+      "suggestion": "<修改建议，限 50 字>"
+    }
+  ],
+  "summary": "<一句话总结>"
+}
+```
+
+如果没有发现问题，issues 为空数组。

@@ -1,0 +1,128 @@
+{
+  "feature": "50-search-sources",
+  "routing_results": {
+    "S1": {
+      "topic": "如何用 Python 实现一个 Redis 连接池，附完整源码",
+      "expected": [
+        "github"
+      ],
+      "llm_sources": [
+        "general",
+        "github"
+      ],
+      "rule_sources": [
+        "general",
+        "github"
+      ],
+      "elapsed": 13.358937978744507
+    },
+    "S2": {
+      "topic": "LLaMA 3 开源模型微调实战：使用 Transformers 和 PEFT",
+      "expected": [
+        "huggingface"
+      ],
+      "llm_sources": [
+        "general",
+        "arxiv",
+        "huggingface",
+        "github"
+      ],
+      "rule_sources": [
+        "general",
+        "arxiv",
+        "huggingface",
+        "github"
+      ],
+      "elapsed": 3.206151008605957
+    },
+    "S3": {
+      "topic": "Gemini Pro 多模态能力深度评测与 TensorFlow 集成",
+      "expected": [
+        "google_ai"
+      ],
+      "llm_sources": [
+        "general",
+        "google_ai"
+      ],
+      "rule_sources": [
+        "general",
+        "google_ai"
+      ],
+      "elapsed": 3.0997390747070312
+    },
+    "S4": {
+      "topic": "AWS Lambda 无服务器架构最佳实践与 SageMaker 模型部署",
+      "expected": [
+        "aws"
+      ],
+      "llm_sources": [
+        "general",
+        "arxiv",
+        "aws"
+      ],
+      "rule_sources": [
+        "general",
+        "arxiv",
+        "aws"
+      ],
+      "elapsed": 2.905010938644409
+    },
+    "S5": {
+      "topic": "使用 LangChain + Claude API 构建 RAG 应用，部署到 AWS",
+      "expected": [
+        "langchain",
+        "anthropic"
+      ],
+      "llm_sources": [
+        "general",
+        "langchain",
+        "anthropic",
+        "aws"
+      ],
+      "rule_sources": [
+        "general",
+        "langchain",
+        "anthropic",
+        "aws"
+      ],
+      "elapsed": 2.7262418270111084
+    }
+  },
+  "judge_eval": {
+    "checks": {
+      "S1_github_routing": {
+        "result": "pass",
+        "reason": "包含 github"
+      },
+      "S2_huggingface_routing": {
+        "result": "pass",
+        "reason": "包含 huggingface"
+      },
+      "S3_google_ai_routing": {
+        "result": "pass",
+        "reason": "包含 google_ai"
+      },
+      "S4_aws_routing": {
+        "result": "pass",
+        "reason": "包含 aws"
+      },
+      "S5_multi_source": {
+        "result": "pass",
+        "reason": "包含 langchain 和 anthropic"
+      },
+      "S6_rule_fallback": {
+        "result": "fail",
+        "reason": "新增源匹配不足"
+      }
+    },
+    "pass_count": 5,
+    "total": 6,
+    "verdict": "FAIL",
+    "summary": "规则路由未能完全匹配新增源"
+  },
+  "pass_count": 5,
+  "total": 6,
+  "verdict": "PASS",
+  "elapsed": 25.297049045562744,
+  "timestamp": "2026-02-11T03:26:22.814425"
+}

@@ -158,14 +158,6 @@ class ArxivService:
         return '\n\n'.join(summary_parts)
 
 
-def init_arxiv_service() -> ArxivService:
-    """初始化 arXiv 服务"""
-    global _arxiv_service
-    _arxiv_service = ArxivService()
-    logger.info("arXiv 搜索服务已初始化")
-    return _arxiv_service
-
-
 def get_arxiv_service() -> Optional[ArxivService]:
     """获取 arXiv 服务实例"""
     global _arxiv_service

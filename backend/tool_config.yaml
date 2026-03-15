@@ -1,0 +1,65 @@
+# VibeBlog 工具配置 — 配置驱动工具系统 (102.08)
+#
+# 格式说明：
+#   name:  工具名称（唯一标识）
+#   group: 工具组（search / crawl / knowledge）
+#   use:   Python 模块路径:变量名（反射加载）
+#   其余字段: 透传给工具实例的额外参数
+#
+# 环境变量引用：$VAR_NAME 会在加载时解析为 os.getenv("VAR_NAME")
+#
+# 切换搜索引擎只需修改 use 路径，无需改代码。
+
+tool_groups:
+  - name: search      # 搜索工具组
+  - name: crawl       # 爬虫工具组
+  - name: knowledge   # 知识处理工具组
+
+tools:
+  # ===== 搜索工具 =====
+  - name: zhipu_search
+    group: search
+    use: services.blog_generator.tools.zhipu:ZhipuSearchTool
+    api_key: $ZAI_SEARCH_API_KEY
+    api_base: $ZAI_SEARCH_API_BASE
+    search_engine: search_pro_quark
+    max_results: 5
+
+  - name: serper_search
+    group: search
+    use: services.blog_generator.tools.serper:SerperSearchTool
+    api_key: $SERPER_API_KEY
+    timeout: 10
+    max_results: 10
+
+  - name: sogou_search
+    group: search
+    use: services.blog_generator.tools.sogou:SogouSearchTool
+    secret_id: $TENCENTCLOUD_SECRET_ID
+    secret_key: $TENCENTCLOUD_SECRET_KEY
+    timeout: 10
+    max_results: 10
+
+  - name: arxiv_search
+    group: search
+    use: services.blog_generator.tools.arxiv:ArxivSearchTool
+    max_results: 5
+
+  - name: scholar_search
+    group: search
+    use: services.blog_generator.tools.scholar:ScholarSearchTool
+    api_key: $SERPER_API_KEY
+    timeout: 10
+    max_results: 10
+
+  # ===== 爬虫工具 =====
+  - name: jina_reader
+    group: crawl
+    use: services.blog_generator.tools.jina:JinaCrawlTool
+    api_key: $JINA_API_KEY
+    timeout: 30
+
+  - name: httpx_scraper
+    group: crawl
+    use: services.blog_generator.tools.httpx_crawl:HttpxCrawlTool
+    timeout: 20

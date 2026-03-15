@@ -1,9 +1,37 @@
 # Docker 部署指南
 
-本文档说明如何使用 Docker 一键部署 vibe-blog 应用。
+本文档说明如何使用 Docker 一键部署 vibe-blog 应用（前端 + 后端）。
 
-常用命令: 
+## 架构说明
+
 ```
+┌─────────────────────────────────────────────────────────┐
+│                      Nginx (:80)                        │
+│  - /api/* → 后端 (Flask)                                │
+│  - /outputs/* → 后端静态资源                            │
+│  - /* → 前端 (Vue)                                      │
+└─────────────────────────────────────────────────────────┘
+         │                              │
+         ▼                              ▼
+┌─────────────────────┐    ┌─────────────────────┐
+│   Backend (:5000)   │    │  Frontend (:3000)   │
+│   Flask + Gunicorn  │    │   Vue + Nginx       │
+└─────────────────────┘    └─────────────────────┘
+```
+
+## 常用命令
+
+```bash
+# 一键重部署（推荐）
+./docker/redeploy.sh
+
+# 仅重部署后端
+./docker/redeploy.sh backend
+
+# 仅重部署前端
+./docker/redeploy.sh frontend
+
+# 手动部署
 cd ~/vibe-blog
 git pull
 docker compose -f docker/docker-compose.yml down

@@ -1,0 +1,24 @@
+# {{ title }}
+
+## {{ subtitle }}
+
+**阅读时间**: {{ reading_time }} min
+
+> {{ core_value }}
+
+## 目录
+{% for section in sections %}
+- [{{ section.title }}](#{{ section.title | lower | replace(' ', '-') | replace('：', '') | replace(':', '') | replace('、', '') | replace('「', '') | replace('」', '') }})
+{% for sub in section.subheadings %}
+  - [{{ sub.title }}](#{{ sub.title | lower | replace(' ', '-') | replace('：', '') | replace(':', '') | replace('、', '') | replace('「', '') | replace('」', '') }})
+{% for child in sub.children %}
+    - [{{ child.title }}](#{{ child.title | lower | replace(' ', '-') | replace('：', '') | replace(':', '') | replace('、', '') | replace('「', '') | replace('」', '') }})
+{% endfor %}
+{% endfor %}
+{% endfor %}
+
+---
+
+{{ introduction }}
+
+---

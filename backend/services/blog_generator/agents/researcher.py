@@ -5,12 +5,24 @@ Researcher Agent - 素材收集
 import json
 import logging
 import os
+import re
 from typing import Dict, Any, List, Optional
 
-from ..prompts.prompt_manager import get_prompt_manager
+from urllib.parse import urlparse
+
+from ..prompts import get_prompt_manager
 from ..services.smart_search_service import get_smart_search_service, init_smart_search_service
+from ..utils.cache_utils import get_cache_manager
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_domain(url: str) -> str:
+    """从 URL 提取域名"""
+    try:
+        return urlparse(url).hostname or ''
+    except Exception:
+        return ''
 
 
 class ResearcherAgent:
@@ -22,7 +34,7 @@ class ResearcherAgent:
     def __init__(self, llm_client, search_service=None, knowledge_service=None):
         """
         初始化 Researcher Agent
-        
+
         Args:
             llm_client: LLM 客户端
             search_service: 搜索服务 (可选，如果不提供则跳过搜索)
@@ -31,7 +43,17 @@ class ResearcherAgent:
         self.llm = llm_client
         self.search_service = search_service
         self.knowledge_service = knowledge_service
-        
+        self.task_manager = None
+        self.task_id = None
+
+        # 初始化缓存管理器
+        self.cache_enabled = os.environ.get('RESEARCHER_CACHE_ENABLED', 'true').lower() == 'true'
+        if self.cache_enabled:
+            self.cache = get_cache_manager()
+            logger.info("💾 Researcher 缓存已启用")
+        else:
+            self.cache = None
+
         # 检查是否启用智能搜索
         self.smart_search_enabled = os.environ.get('SMART_SEARCH_ENABLED', 'false').lower() == 'true'
         if self.smart_search_enabled:
@@ -40,6 +62,84 @@ class ResearcherAgent:
             if not smart_service:
                 init_smart_search_service(llm_client)
             logger.info("🧠 智能知识源搜索已启用")
+
+        # 75.03 深度抓取开关
+        self.deep_scrape_enabled = os.environ.get('DEEP_SCRAPE_ENABLED', 'false').lower() == 'true'
+        self._deep_scraper = None
+        if self.deep_scrape_enabled:
+            try:
+                from ..services.deep_scraper import DeepScraper
+                self._deep_scraper = DeepScraper(
+                    jina_api_key=os.environ.get('JINA_API_KEY'),
+                    llm_service=llm_client,
+                    top_n=int(os.environ.get('DEEP_SCRAPE_TOP_N', '3')),
+                )
+                logger.info("🔗 深度抓取已启用 (Jina + httpx)")
+            except Exception as e:
+                logger.warning(f"深度抓取初始化失败: {e}")
+
+        # 75.06 本地素材库开关
+        self.local_material_enabled = os.environ.get('LOCAL_MATERIAL_ENABLED', 'false').lower() == 'true'
+        self._material_store = None
+        if self.local_material_enabled:
+            try:
+                from ..services.local_material_store import LocalMaterialStore
+                material_dir = os.environ.get(
+                    'LOCAL_MATERIAL_DIR',
+                    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'materials')
+                )
+                self._material_store = LocalMaterialStore(base_dir=material_dir)
+                logger.info(f"📦 本地素材库已启用: {material_dir}")
+            except Exception as e:
+                logger.warning(f"本地素材库初始化失败: {e}")
+
+        # 102.08 配置驱动工具注册表（可选，默认 false）
+        self._tool_registry = None
+        if os.environ.get('TOOL_REGISTRY_ENABLED', 'false').lower() == 'true':
+            try:
+                from ..tools.registry import get_tool_registry
+                self._tool_registry = get_tool_registry()
+                available = self._tool_registry.list_tools()
+                logger.info(f"102.08 ToolRegistry 已启用，已加载工具: {available}")
+            except Exception as e:
+                logger.warning(f"ToolRegistry 初始化失败，回退到硬编码路径: {e}")
+
+        # 41.04 子查询并行研究引擎
+        self.sub_query_enabled = os.environ.get('SUB_QUERY_ENABLED', 'false').lower() == 'true'
+        self._sub_query_engine = None
+        if self.sub_query_enabled:
+            try:
+                from ..services.sub_query_engine import SubQueryEngine
+                self._sub_query_engine = SubQueryEngine(
+                    llm_client=llm_client,
+                    search_service=search_service,
+                )
+                logger.info("41.04 子查询并行研究引擎已启用")
+            except Exception as e:
+                logger.warning(f"子查询引擎初始化失败: {e}")
+
+        # 41.03 语义压缩器
+        self._semantic_compressor = None
+        if os.environ.get('SEMANTIC_COMPRESS_ENABLED', 'false').lower() == 'true':
+            try:
+                from ..services.semantic_compressor import SemanticCompressor
+                self._semantic_compressor = SemanticCompressor()
+                logger.info("41.03 语义压缩器已启用")
+            except Exception as e:
+                logger.warning(f"语义压缩器初始化失败: {e}")
+
+        # 41.01 深度研究引擎
+        self._deep_research_engine = None
+        if os.environ.get('DEEP_RESEARCH_ENABLED', 'false').lower() == 'true':
+            try:
+                from ..services.deep_research_engine import DeepResearchEngine
+                self._deep_research_engine = DeepResearchEngine(
+                    llm_client=llm_client,
+                    search_service=search_service,
+                )
+                logger.info("41.01 深度研究引擎已启用")
+            except Exception as e:
+                logger.warning(f"深度研究引擎初始化失败: {e}")
     
     def generate_search_queries(self, topic: str, target_audience: str) -> List[str]:
         """
@@ -76,6 +176,9 @@ class ResearcherAgent:
             
             queries = json.loads(response)
             if isinstance(queries, list):
+                # 确保原始 topic 作为第一个 query（防止 LLM 改写主题）
+                if queries and topic.lower() not in queries[0].lower():
+                    queries.insert(0, topic)
                 return queries
             return default_queries
             
@@ -86,30 +189,62 @@ class ResearcherAgent:
     def search(self, topic: str, target_audience: str, max_results: int = 10) -> List[Dict]:
         """
         执行搜索
-        
+
         Args:
             topic: 技术主题
             target_audience: 目标受众
             max_results: 最大结果数
-            
+
         Returns:
             搜索结果列表
         """
+        # 尝试从缓存获取
+        if self.cache:
+            cached_result = self.cache.get(
+                'search',
+                topic=topic,
+                target_audience=target_audience,
+                max_results=max_results
+            )
+            if cached_result is not None:
+                return cached_result
+
         if not self.search_service:
             logger.warning("搜索服务未配置，跳过搜索")
             return []
-        
+
         queries = self.generate_search_queries(topic, target_audience)
         all_results = []
-        
+
         for query in queries:
             try:
+                # 推送 search_started 事件
+                if self.task_manager and self.task_id:
+                    self.task_manager.send_event(self.task_id, 'result', {
+                        'type': 'search_started',
+                        'data': {'query': query, 'engine': 'zhipu'}
+                    })
                 result = self.search_service.search(query, max_results=max_results // len(queries))
                 if result.get('success') and result.get('results'):
                     all_results.extend(result['results'])
+                    # 推送 search_results 事件
+                    if self.task_manager and self.task_id:
+                        card_results = []
+                        for r in result['results'][:10]:
+                            url = r.get('url', '')
+                            card_results.append({
+                                'url': url,
+                                'title': r.get('title', ''),
+                                'snippet': (r.get('content', '') or r.get('snippet', ''))[:120],
+                                'domain': _extract_domain(url),
+                            })
+                        self.task_manager.send_event(self.task_id, 'result', {
+                            'type': 'search_results',
+                            'data': {'query': query, 'results': card_results}
+                        })
             except Exception as e:
                 logger.error(f"搜索失败 [{query}]: {e}")
-        
+
         # 去重
         seen_urls = set()
         unique_results = []
@@ -118,41 +253,99 @@ class ResearcherAgent:
             if url and url not in seen_urls:
                 seen_urls.add(url)
                 unique_results.append(item)
-        
-        return unique_results[:max_results]
-    
+
+        final_results = unique_results[:max_results]
+
+        # 保存到缓存
+        if self.cache:
+            self.cache.set(
+                'search',
+                final_results,
+                topic=topic,
+                target_audience=target_audience,
+                max_results=max_results
+            )
+
+        return final_results
+
+    @staticmethod
+    def _clean_search_results(results: List[Dict]) -> List[Dict]:
+        """统一清洗搜索结果：去除 HTML 标签、修正 source/url 字段"""
+        for item in results:
+            # 修正 source 字段：优先使用 url
+            if not item.get('source') or item.get('source') == '通用搜索':
+                item['source'] = item.get('url', '通用搜索')
+            # 确保 url 字段存在且优先
+            if not item.get('url') and item.get('source', '') != '通用搜索':
+                item['url'] = item.get('source', '')
+            # 去除 HTML 标签
+            for field in ('title', 'content', 'snippet'):
+                if item.get(field):
+                    item[field] = re.sub(r'<[^>]+>', '', item[field])
+        return results
+
     def _smart_search(self, topic: str, target_audience: str, max_results: int = 15) -> List[Dict]:
         """
         使用智能搜索服务（LLM 路由 + 多源并行）
-        
+
         Args:
             topic: 技术主题
             target_audience: 目标受众
             max_results: 最大结果数
-            
+
         Returns:
             搜索结果列表
         """
+        # 尝试从缓存获取
+        if self.cache:
+            cached_result = self.cache.get(
+                'smart_search',
+                topic=topic,
+                target_audience=target_audience,
+                max_results=max_results
+            )
+            if cached_result is not None:
+                return cached_result
+
         smart_service = get_smart_search_service()
         if not smart_service:
             logger.warning("智能搜索服务未初始化，回退到普通搜索")
             return self.search(topic, target_audience, max_results)
-        
+
         try:
             result = smart_service.search(
                 topic=topic,
                 article_type=target_audience,
                 max_results_per_source=5
             )
-            
+
             if result.get('success'):
                 sources_used = result.get('sources_used', [])
-                logger.info(f"🧠 智能搜索完成，使用搜索源: {sources_used}")
-                return result.get('results', [])[:max_results]
+                logger.info(f"智能搜索完成，使用搜索源: {sources_used}")
+                # 将搜索路由结果发送到前端
+                if self.task_manager and self.task_id:
+                    source_names = ', '.join(sources_used) if sources_used else '无'
+                    self.task_manager.send_event(self.task_id, 'log', {
+                        'logger': 'search_router',
+                        'message': f'搜索路由决策: [{source_names}]，共 {len(result.get("results", []))} 条结果',
+                    })
+                search_results = result.get('results', [])[:max_results]
+
+                # 保存到缓存
+                if self.cache:
+                    self.cache.set(
+                        'smart_search',
+                        search_results,
+                        topic=topic,
+                        target_audience=target_audience,
+                        max_results=max_results
+                    )
+
+                return search_results
             else:
                 logger.warning(f"智能搜索失败: {result.get('error')}，回退到普通搜索")
                 return self.search(topic, target_audience, max_results)
-                
+
         except Exception as e:
             logger.error(f"智能搜索异常: {e}，回退到普通搜索")
             return self.search(topic, target_audience, max_results)
@@ -166,13 +359,13 @@ class ResearcherAgent:
     ) -> Dict[str, Any]:
         """
         整理搜索结果，生成背景知识摘要
-        
+
         Args:
             topic: 技术主题
             search_results: 搜索结果
             target_audience: 目标受众
             search_depth: 搜索深度
-            
+
         Returns:
             整理后的结果
         """
@@ -182,7 +375,20 @@ class ResearcherAgent:
                 "key_concepts": [],
                 "top_references": []
             }
-        
+
+        # 尝试从缓存获取（基于 topic 和搜索结果的 URL 列表）
+        if self.cache:
+            result_urls = [r.get('url', '') for r in search_results[:10]]
+            cached_result = self.cache.get(
+                'summarize',
+                topic=topic,
+                target_audience=target_audience,
+                search_depth=search_depth,
+                result_urls=result_urls
+            )
+            if cached_result is not None:
+                return cached_result
+
         pm = get_prompt_manager()
         prompt = pm.render_researcher(
             topic=topic,
@@ -190,26 +396,34 @@ class ResearcherAgent:
             target_audience=target_audience,
             search_results=search_results[:10]
         )
-        
+
         try:
             response = self.llm.chat(
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"}
             )
-            
+
             # 提取 JSON（处理 markdown 代码块）
-            json_str = response
-            if '```json' in response:
-                json_str = response.split('```json')[1].split('```')[0].strip()
-            elif '```' in response:
-                json_str = response.split('```')[1].split('```')[0].strip()
-            
+            json_str = response.strip()
+            if '```json' in json_str:
+                start = json_str.find('```json') + 7
+                end = json_str.find('```', start)
+                json_str = json_str[start:end].strip() if end != -1 else json_str[start:].strip()
+            elif '```' in json_str:
+                start = json_str.find('```') + 3
+                end = json_str.find('```', start)
+                json_str = json_str[start:end].strip() if end != -1 else json_str[start:].strip()
+
             # 尝试解析 JSON
-            result = json.loads(json_str)
+            try:
+                result = json.loads(json_str)
+            except json.JSONDecodeError:
+                result = json.loads(json_str, strict=False)
             key_concepts = result.get("key_concepts", [])
-            
+
             # 调试：打印实际返回内容
             logger.info(f"LLM 返回 key_concepts 类型: {type(key_concepts)}, 值: {key_concepts}")
-            
+
             # 如果 key_concepts 为空但有其他可能的字段名
             if not key_concepts:
                 # 尝试其他可能的字段名
@@ -218,21 +432,45 @@ class ResearcherAgent:
                         key_concepts = result.get(alt_key)
                         logger.info(f"使用备选字段 {alt_key}: {key_concepts}")
                         break
-            
+
             if key_concepts:
                 logger.info(f"核心概念: {[c.get('name', c) if isinstance(c, dict) else c for c in key_concepts[:5]]}")
-            
-            return {
+
+            # 解析 Instructional Design 分析（新增）
+            instructional_analysis = result.get("instructional_analysis", {})
+            if instructional_analysis:
+                learning_objectives = instructional_analysis.get("learning_objectives", [])
+                verbatim_data = instructional_analysis.get("verbatim_data", [])
+                content_type = instructional_analysis.get("content_type", "tutorial")
+                logger.info(f"📚 教学设计分析: 学习目标 {len(learning_objectives)} 个, "
+                           f"Verbatim 数据 {len(verbatim_data)} 项, 内容类型: {content_type}")
+
+            summary_result = {
                 "background_knowledge": result.get("background_knowledge", ""),
                 "key_concepts": key_concepts,
-                "top_references": result.get("top_references", [])
+                "top_references": result.get("top_references", []),
+                "instructional_analysis": instructional_analysis  # 新增
             }
-            
+
+            # 保存到缓存
+            if self.cache:
+                result_urls = [r.get('url', '') for r in search_results[:10]]
+                self.cache.set(
+                    'summarize',
+                    summary_result,
+                    topic=topic,
+                    target_audience=target_audience,
+                    search_depth=search_depth,
+                    result_urls=result_urls
+                )
+
+            return summary_result
+
         except json.JSONDecodeError as e:
             logger.error(f"JSON 解析失败: {e}, 响应内容: {response[:500] if response else 'None'}")
         except Exception as e:
             logger.error(f"整理搜索结果失败: {e}")
-        
+
         # 返回简单摘要
         return {
             "background_knowledge": '\n'.join([
@@ -245,17 +483,175 @@ class ResearcherAgent:
                 ]
             }
     
+    def distill(self, topic: str, search_results: List[Dict]) -> Dict[str, Any]:
+        """
+        深度提炼搜索结果（类 OpenDraft Scribe）
+
+        Args:
+            topic: 技术主题
+            search_results: 原始搜索结果
+
+        Returns:
+            提炼后的结构化素材
+        """
+        empty_result = {
+            "sources": [],
+            "common_themes": [],
+            "contradictions": [],
+            "material_by_type": {"concepts": [], "cases": [], "data": [], "comparisons": []}
+        }
+        if not search_results:
+            return empty_result
+
+        # 尝试从缓存获取
+        if self.cache:
+            result_urls = [r.get('url', '') for r in search_results[:15]]
+            cached_result = self.cache.get(
+                'distill',
+                topic=topic,
+                result_urls=result_urls
+            )
+            if cached_result is not None:
+                return cached_result
+
+        pm = get_prompt_manager()
+        prompt = pm.render_distill_sources(
+            topic=topic,
+            search_results=search_results[:15]
+        )
+
+        try:
+            response = self.llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"}
+            )
+
+            # 提取 JSON
+            json_str = response.strip()
+            if '```json' in json_str:
+                json_str = json_str.split('```json')[1].split('```')[0].strip()
+            elif '```' in json_str:
+                json_str = json_str.split('```')[1].split('```')[0].strip()
+
+            result = json.loads(json_str)
+
+            # 确保必要字段存在
+            result.setdefault('sources', [])
+            result.setdefault('common_themes', [])
+            result.setdefault('contradictions', [])
+            result.setdefault('material_by_type',
+                              {"concepts": [], "cases": [], "data": [], "comparisons": []})
+
+            logger.info(f"🔬 深度提炼完成: {len(result['sources'])} 条素材, "
+                        f"{len(result['common_themes'])} 个共同主题, "
+                        f"{len(result['contradictions'])} 个矛盾点")
+
+            # 保存到缓存
+            if self.cache:
+                result_urls = [r.get('url', '') for r in search_results[:15]]
+                self.cache.set(
+                    'distill',
+                    result,
+                    topic=topic,
+                    result_urls=result_urls
+                )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"深度提炼失败: {e}")
+            return empty_result
+
+    def analyze_gaps(self, topic: str, article_type: str, distilled: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        缺口分析（类 OpenDraft Signal）
+
+        Args:
+            topic: 技术主题
+            article_type: 文章类型
+            distilled: distill() 的输出
+
+        Returns:
+            缺口分析结果
+        """
+        empty_result = {
+            "content_gaps": [],
+            "unique_angles": [],
+            "writing_recommendations": {}
+        }
+        if not distilled or not distilled.get('sources'):
+            return empty_result
+
+        # 尝试从缓存获取
+        if self.cache:
+            cached_result = self.cache.get(
+                'analyze_gaps',
+                topic=topic,
+                article_type=article_type,
+                themes_count=len(distilled.get('common_themes', []))
+            )
+            if cached_result is not None:
+                return cached_result
+
+        pm = get_prompt_manager()
+        prompt = pm.render_analyze_gaps(
+            topic=topic,
+            article_type=article_type,
+            common_themes=distilled.get('common_themes', []),
+            material_by_type=distilled.get('material_by_type', {}),
+            contradictions=distilled.get('contradictions', [])
+        )
+
+        try:
+            response = self.llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"}
+            )
+
+            # 提取 JSON
+            json_str = response.strip()
+            if '```json' in json_str:
+                json_str = json_str.split('```json')[1].split('```')[0].strip()
+            elif '```' in json_str:
+                json_str = json_str.split('```')[1].split('```')[0].strip()
+
+            result = json.loads(json_str)
+
+            # 确保必要字段存在
+            result.setdefault('content_gaps', [])
+            result.setdefault('unique_angles', [])
+            result.setdefault('writing_recommendations', {})
+
+            logger.info(f"🔍 缺口分析完成: {len(result['content_gaps'])} 个缺口, "
+                        f"{len(result['unique_angles'])} 个独特角度")
+
+            # 保存到缓存
+            if self.cache:
+                self.cache.set(
+                    'analyze_gaps',
+                    result,
+                    topic=topic,
+                    article_type=article_type,
+                    themes_count=len(distilled.get('common_themes', []))
+                )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"缺口分析失败: {e}")
+            return empty_result
+
     def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         执行素材收集
-        
+
         支持两种模式：
         1. 无文档上传 → 原有流程（仅网络搜索）
         2. 有文档上传 → 知识融合流程（文档 + 网络搜索）
-        
+
         Args:
             state: 共享状态
-            
+
         Returns:
             更新后的状态
         """
@@ -279,7 +675,20 @@ class ResearcherAgent:
             logger.info(f"__DOC_PREVIEW__{preview}__END_PREVIEW__")
         
         # 1. 执行网络搜索
-        if self.smart_search_enabled:
+        if self._sub_query_engine:
+            # 41.04 子查询并行研究模式
+            logger.info(f"🔬 启动子查询并行研究...")
+            sq_result = self._sub_query_engine.run(
+                topic=topic, target_audience=target_audience, max_results=15,
+            )
+            search_results = sq_result['results']
+            state['sub_queries'] = sq_result['sub_queries']
+            state['sub_query_stats'] = sq_result['stats']
+            logger.info(
+                f"🔬 子查询并行研究完成: {sq_result['stats']['sub_query_count']} 个子查询, "
+                f"{sq_result['stats']['final_results']} 条结果"
+            )
+        elif self.smart_search_enabled:
             # 使用智能搜索（LLM 路由 + 多源并行）
             logger.info(f"🧠 启动智能知识源搜索...")
             search_results = self._smart_search(topic, target_audience)
@@ -287,7 +696,10 @@ class ResearcherAgent:
             # 使用普通搜索
             logger.info(f"🌐 启动网络搜索...")
             search_results = self.search(topic, target_audience)
-        
+
+        # 统一清洗搜索结果（无论来自缓存还是实时搜索）
+        search_results = self._clean_search_results(search_results)
+
         # 2. 知识融合分支
         if self.knowledge_service and has_document:
             # ✅ 有文档 → 走知识融合逻辑
@@ -323,9 +735,36 @@ class ResearcherAgent:
             # ✅ 无文档 → 完全走原有逻辑，零改动
             logger.info("📋 使用原有搜索模式（无文档上传）")
             logger.info(f"📋 将使用网络搜索结果生成博客内容")
+
+            # 41.01 深度研究：在初始搜索后迭代补充
+            if self._deep_research_engine and search_results:
+                logger.info("🔬 启动深度研究迭代...")
+                dr_result = self._deep_research_engine.run(
+                    topic=topic,
+                    target_audience=target_audience,
+                    initial_results=search_results,
+                )
+                search_results = dr_result['results']
+                state['deep_research_stats'] = {
+                    'rounds': dr_result['rounds'],
+                    'total_queries': dr_result['total_queries'],
+                    'coverage_score': dr_result['coverage_score'],
+                }
+                logger.info(
+                    f"🔬 深度研究完成: {dr_result['rounds']} 轮, "
+                    f"{len(search_results)} 条结果, 覆盖度 {dr_result['coverage_score']}%"
+                )
+
+            # 41.03 语义压缩：在 summarize 前压缩搜索结果
+            compressed_results = search_results
+            if self._semantic_compressor and search_results:
+                compressed_results = self._semantic_compressor.compress(
+                    query=topic, search_results=search_results,
+                )
+
             summary = self.summarize(
                 topic=topic,
-                search_results=search_results,
+                search_results=compressed_results,
                 target_audience=target_audience
             )
             state['knowledge_source_stats'] = {
@@ -337,18 +776,122 @@ class ResearcherAgent:
         
         # 3. 更新状态
         state['search_results'] = search_results
-        state['background_knowledge'] = summary.get('background_knowledge', '')
+        # 句子级去重：消除 LLM summarize 输出的自我重复
+        bg_raw = summary.get('background_knowledge', '')
+        if bg_raw:
+            sentences = [s.strip() for s in bg_raw.split('。') if s.strip()]
+            seen = []
+            for s in sentences:
+                if s not in seen:
+                    seen.append(s)
+            bg_raw = '。'.join(seen) + ('。' if sentences else '')
+        state['background_knowledge'] = bg_raw
         state['key_concepts'] = [
             c.get('name', c) if isinstance(c, dict) else c
             for c in summary.get('key_concepts', [])
         ]
+        # 保留完整的引用信息（包含 title 和 url）
         state['reference_links'] = [
-            r.get('url', r) if isinstance(r, dict) else r
+            r if isinstance(r, dict) else {'title': '', 'url': r}
             for r in summary.get('top_references', summary.get('web_references', []))
         ]
         
+        # 4. 更新 Instructional Design 相关状态（新增）
+        instructional_analysis = summary.get('instructional_analysis', {})
+        state['instructional_analysis'] = instructional_analysis
+        state['learning_objectives'] = instructional_analysis.get('learning_objectives', [])
+        state['verbatim_data'] = instructional_analysis.get('verbatim_data', [])
+
+        # 5. 本地素材库查询（75.06）
+        if self._material_store and search_results:
+            try:
+                local_hits = self._material_store.search(topic, limit=5)
+                if local_hits:
+                    logger.info(f"📦 本地素材库命中 {len(local_hits)} 条")
+                    for hit in local_hits:
+                        search_results.append({
+                            'title': hit.get('title', ''),
+                            'url': hit.get('url', ''),
+                            'content': hit.get('summary', ''),
+                            'source': 'local_material',
+                        })
+            except Exception as e:
+                logger.warning(f"本地素材库查询失败: {e}")
+
+        # 6. 深度抓取 Top N 搜索结果（75.03）
+        deep_scraped = []
+        if self._deep_scraper and search_results:
+            try:
+                logger.info("🔗 开始深度抓取 Top N 搜索结果...")
+                deep_scraped = self._deep_scraper.scrape_top_n(search_results, topic)
+                if deep_scraped:
+                    logger.info(f"🔗 深度抓取完成: {len(deep_scraped)} 篇高质量素材")
+                    # 推送 crawl_completed 事件
+                    if self.task_manager and self.task_id:
+                        for item in deep_scraped:
+                            url = item.get('url', '')
+                            self.task_manager.send_event(self.task_id, 'result', {
+                                'type': 'crawl_completed',
+                                'data': {
+                                    'url': url,
+                                    'title': item.get('title', ''),
+                                    'content_length': len(item.get('content', '') or item.get('summary', '')),
+                                    'domain': _extract_domain(url),
+                                }
+                            })
+            except Exception as e:
+                logger.warning(f"深度抓取失败: {e}")
+
+        # 7. 深度提炼 + 缺口分析（52号方案）
+        distilled = {}
+        gap_analysis = {}
+        if search_results:
+            logger.info("🔬 开始深度提炼搜索结果...")
+            distilled = self.distill(topic, search_results)
+
+            logger.info("🔍 开始缺口分析...")
+            article_type = state.get('article_type', 'tutorial')
+            gap_analysis = self.analyze_gaps(topic, article_type, distilled)
+
+        state['distilled_sources'] = distilled.get('sources', [])
+        # 清洗 distilled_sources 中的 HTML 标签（缓存可能包含旧数据）
+        for src in state['distilled_sources']:
+            for field in ('core_insight', 'title', 'key_facts'):
+                val = src.get(field)
+                if isinstance(val, str):
+                    src[field] = re.sub(r'<[^>]+>', '', val)
+                elif isinstance(val, list):
+                    src[field] = [re.sub(r'<[^>]+>', '', v) if isinstance(v, str) else v for v in val]
+        state['material_by_type'] = distilled.get('material_by_type', {})
+        state['common_themes'] = distilled.get('common_themes', [])
+        state['contradictions'] = distilled.get('contradictions', [])
+        state['content_gaps'] = gap_analysis.get('content_gaps', [])
+        state['unique_angles'] = gap_analysis.get('unique_angles', [])
+        state['writing_recommendations'] = gap_analysis.get('writing_recommendations', {})
+        state['deep_scraped_materials'] = deep_scraped  # 75.03 深度抓取素材
+
         stats = state['knowledge_source_stats']
         logger.info(f"✅ 素材收集完成: 文档知识 {stats['document_count']} 条, "
                     f"网络搜索 {stats['web_count']} 条, 核心概念 {len(state['key_concepts'])} 个")
+        
+        # 打印 Instructional Design 统计
+        if instructional_analysis:
+            logger.info(f"📚 教学设计: 学习目标 {len(state['learning_objectives'])} 个, "
+                       f"Verbatim 数据 {len(state['verbatim_data'])} 项")
+        
+        # 输出 researcher 阶段结果（用于测试 mock）
+        import json
+        researcher_output = {
+            'background_knowledge': state.get('background_knowledge', ''),
+            'key_concepts': state.get('key_concepts', []),
+            'reference_links': state.get('reference_links', []),
+            'learning_objectives': state.get('learning_objectives', []),
+            'verbatim_data': state.get('verbatim_data', []),
+            'knowledge_source_stats': state.get('knowledge_source_stats', {}),
+            'distilled_sources': state.get('distilled_sources', []),
+            'content_gaps': state.get('content_gaps', []),
+            'writing_recommendations': state.get('writing_recommendations', {}),
+        }
+        logger.info(f"__RESEARCHER_OUTPUT_JSON__{json.dumps(researcher_output, ensure_ascii=False)}__END_JSON__")
         
         return state

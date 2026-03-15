@@ -9,12 +9,49 @@ import re
 from typing import Dict, Any, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ..prompts.prompt_manager import get_prompt_manager
+from ..prompts import get_prompt_manager
 
 # 从环境变量读取并行配置，默认为 3
 MAX_WORKERS = int(os.environ.get('BLOG_GENERATOR_MAX_WORKERS', '3'))
 
+def _should_use_parallel():
+    """判断是否应该使用并行执行。当开启追踪时禁用并行，避免上下文丢失。"""
+    if os.environ.get('TRACE_ENABLED', 'false').lower() == 'true':
+        return False
+    return True
+
 logger = logging.getLogger(__name__)
+
+# Langfuse 追踪装饰器（只在 TRACE_ENABLED=true 时启用）
+def _get_langfuse_client():
+    """获取 Langfuse client，未启用时返回 None"""
+    if os.environ.get('TRACE_ENABLED', 'false').lower() == 'true':
+        try:
+            from langfuse import get_client
+            return get_client()
+        except ImportError:
+            pass
+        except Exception:
+            pass
+    return None
+
+def _get_observe_decorator():
+    """获取 Langfuse observe 装饰器，未启用时返回空装饰器"""
+    if os.environ.get('TRACE_ENABLED', 'false').lower() == 'true':
+        try:
+            from langfuse import observe
+            return observe
+        except ImportError:
+            pass
+    # 返回空装饰器
+    def noop_decorator(*args, **kwargs):
+        def wrapper(func):
+            return func
+        return wrapper if not args or not callable(args[0]) else func
+    return noop_decorator
+
+observe = _get_observe_decorator()
+langfuse_client = _get_langfuse_client()
 
 
 class CoderAgent:
@@ -31,12 +68,14 @@ class CoderAgent:
         """
         self.llm = llm_client
     
+    @observe(name="coder.generate_code", as_type="generation")
     def generate_code(
         self,
         code_description: str,
         context: str,
         language: str = "python",
-        complexity: str = "medium"
+        complexity: str = "medium",
+        **kwargs  # 接收 langfuse_parent_trace_id 等参数
     ) -> Dict[str, Any]:
         """
         生成代码示例
@@ -99,6 +138,7 @@ class CoderAgent:
         
         return placeholders
     
+    @observe(name="coder.run")
     def run(self, state: Dict[str, Any], max_workers: int = None) -> Dict[str, Any]:
         """
         执行代码生成（并行）
@@ -148,12 +188,16 @@ class CoderAgent:
         if max_workers is None:
             max_workers = MAX_WORKERS
         
-        logger.info(f"共 {len(tasks)} 个代码块需要生成，使用 {min(max_workers, len(tasks))} 个并行线程")
+        use_parallel = _should_use_parallel()
+        if use_parallel:
+            logger.info(f"共 {len(tasks)} 个代码块需要生成，使用 {min(max_workers, len(tasks))} 个并行线程")
+        else:
+            logger.info(f"共 {len(tasks)} 个代码块需要生成，使用串行模式（追踪已启用）")
         
-        # 第二步：并行生成代码
+        # 第二步：生成代码
         results = [None] * len(tasks)  # 预分配结果数组，保证顺序
         
-        def generate_task(task):
+        def generate_single_task(task):
             """单个代码生成任务"""
             try:
                 code = self.generate_code(
@@ -184,16 +228,50 @@ class CoderAgent:
                     'error': str(e)
                 }
         
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(generate_task, task): task for task in tasks}
-            
-            for future in as_completed(futures):
-                result = future.result()
-                order_idx = result['order_idx']
-                results[order_idx] = result
+        if use_parallel:
+            # 并行执行
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(generate_single_task, task): task for task in tasks}
                 
-                if result['success']:
-                    logger.info(f"代码生成完成: {result['code_block']['id']}")
+                for future in as_completed(futures):
+                    result = future.result()
+                    order_idx = result['order_idx']
+                    results[order_idx] = result
+                    
+                    if result['success']:
+                        logger.info(f"代码生成完成: {result['code_block']['id']}")
+        else:
+            # 串行执行（追踪模式）- 直接调用方法以保持 Langfuse 上下文
+            for task in tasks:
+                try:
+                    code = self.generate_code(
+                        code_description=task['placeholder']['description'],
+                        context=f"章节: {task['section_title']}",
+                        language="python",
+                        complexity="medium"
+                    )
+                    results[task['order_idx']] = {
+                        'success': True,
+                        'order_idx': task['order_idx'],
+                        'section_idx': task['section_idx'],
+                        'code_block': {
+                            "id": task['placeholder']['id'],
+                            "code": code.get('code', ''),
+                            "output": code.get('output', ''),
+                            "explanation": code.get('explanation', ''),
+                            "language": code.get('language', 'python')
+                        }
+                    }
+                    logger.info(f"代码生成完成: {task['placeholder']['id']}")
+                except Exception as e:
+                    logger.error(f"代码生成失败 [{task['placeholder']['id']}]: {e}")
+                    results[task['order_idx']] = {
+                        'success': False,
+                        'order_idx': task['order_idx'],
+                        'section_idx': task['section_idx'],
+                        'placeholder_id': task['placeholder']['id'],
+                        'error': str(e)
+                    }
         
         # 第三步：按原始顺序组装结果，更新章节关联
         code_blocks = []
