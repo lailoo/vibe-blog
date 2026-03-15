@@ -15,6 +15,9 @@ import pytest
 _BACKEND = os.path.join(os.path.dirname(__file__), '..')
 
 # Stub the two direct dependencies of assembler.py so we don't pull in LLM stack.
+_original_prompts = sys.modules.get('services.blog_generator.prompts')
+_original_helpers = sys.modules.get('services.blog_generator.utils.helpers')
+
 _fake_prompts = types.ModuleType('services.blog_generator.prompts')
 _fake_prompts.get_prompt_manager = lambda: None
 sys.modules['services.blog_generator.prompts'] = _fake_prompts
@@ -34,6 +37,17 @@ _spec = importlib.util.spec_from_file_location(
 _assembler_mod = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _assembler_mod
 _spec.loader.exec_module(_assembler_mod)
+
+# Restore global import state so this test file does not pollute later tests.
+if _original_prompts is not None:
+    sys.modules['services.blog_generator.prompts'] = _original_prompts
+else:
+    sys.modules.pop('services.blog_generator.prompts', None)
+
+if _original_helpers is not None:
+    sys.modules['services.blog_generator.utils.helpers'] = _original_helpers
+else:
+    sys.modules.pop('services.blog_generator.utils.helpers', None)
 
 AssemblerAgent = _assembler_mod.AssemblerAgent
 
