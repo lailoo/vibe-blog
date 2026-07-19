@@ -34,6 +34,7 @@ _assembler_path = os.path.join(
 _spec = importlib.util.spec_from_file_location(
     'services.blog_generator.agents.assembler', _assembler_path
 )
+_original_assembler = sys.modules.get(_spec.name)
 _assembler_mod = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _assembler_mod
 _spec.loader.exec_module(_assembler_mod)
@@ -49,7 +50,17 @@ if _original_helpers is not None:
 else:
     sys.modules.pop('services.blog_generator.utils.helpers', None)
 
+if _original_assembler is not None:
+    sys.modules[_spec.name] = _original_assembler
+else:
+    sys.modules.pop(_spec.name, None)
+
 AssemblerAgent = _assembler_mod.AssemblerAgent
+
+
+def test_direct_loader_does_not_leave_assembler_module_cached():
+    """The lightweight import must not affect later production imports."""
+    assert sys.modules.get(_spec.name) is _original_assembler
 
 
 def _make_assembler():
