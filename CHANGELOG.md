@@ -9,6 +9,13 @@ All notable changes to the Vibe Blog project will be documented in this file.
 ### Changed
 - 🔧 **覆盖率产物治理** — 停止跟踪根目录和前端生成的 coverage 报告，并补充通用忽略规则。
 
+### Fixed
+- 🐛 **Assembler 测试模块隔离** — 直接加载 Assembler 后恢复 `sys.modules` 原始状态，避免测试顺序污染后续生产导入。
+- 🐛 **pytest 配置作用域** — 调整 coverage section 位置，确保 markers、asyncio 和 warning 配置由 pytest 正确读取。
+
+### Tests
+- ✨ **导入顺序回归** — 新增临时 Assembler 模块不残留的回归断言，并验证与 code2prompt 测试的双向执行顺序。
+
 ---
 
 ## 2026-02-27 (PR #100 + Optimizations)
